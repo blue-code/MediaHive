@@ -5,6 +5,7 @@ const { execSync, spawnSync } = require("child_process");
 const { thumbnailDir, archiveExtractDir, transcodedDir } = require("../config");
 const { ensureDir } = require("../utils/fileStore");
 
+const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".bmp"]);
 const SUPPORTED_IOS_VIDEO_EXTS = new Set([".mp4", ".m4v", ".mov"]);
 const VIDEO_EXTS = new Set([...SUPPORTED_IOS_VIDEO_EXTS, ".mkv", ".avi", ".flv", ".wmv", ".webm"]);
 const ARCHIVE_EXTS = new Set([".zip", ".cbz", ".cbr"]);
@@ -36,6 +37,7 @@ function detectMediaKind(entryPath, dirent) {
   if (VIDEO_EXTS.has(ext)) return "video";
   if (ARCHIVE_EXTS.has(ext)) return "archive";
   if (SUBTITLE_EXTS.has(ext)) return "subtitle";
+  if (IMAGE_EXTS.has(ext)) return "image";
   return "file";
 }
 
