@@ -266,6 +266,8 @@ function handleVideo(item) {
   params.set("path", item.path);
   if (item.libraryId) params.set("library", item.libraryId);
   params.set("ios", "true");
+  const token = getToken();
+  if (token) params.set("token", token);
 
   const video = document.createElement("video");
   video.controls = true;
@@ -290,6 +292,8 @@ function handleImage(item) {
   const params = new URLSearchParams();
   params.set("path", item.path);
   if (item.libraryId) params.set("library", item.libraryId);
+  const token = getToken();
+  if (token) params.set("token", token);
   const img = document.createElement("img");
   img.src = `/api/library/stream?${params.toString()}`;
   img.alt = item.name;
@@ -307,6 +311,8 @@ function handleFile(item) {
   const params = new URLSearchParams();
   params.set("path", item.path);
   if (item.libraryId) params.set("library", item.libraryId);
+  const token = getToken();
+  if (token) params.set("token", token);
   const link = document.createElement("a");
   link.href = `/api/library/stream?${params.toString()}`;
   link.target = "_blank";
