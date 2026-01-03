@@ -10,6 +10,12 @@ const SUPPORTED_IOS_VIDEO_EXTS = new Set([".mp4", ".m4v", ".mov"]);
 const VIDEO_EXTS = new Set([...SUPPORTED_IOS_VIDEO_EXTS, ".mkv", ".avi", ".flv", ".wmv", ".webm"]);
 const ARCHIVE_EXTS = new Set([".zip", ".cbz", ".cbr"]);
 const SUBTITLE_EXTS = new Set([".srt", ".smi"]);
+const ARCHIVE_EXTRACTORS = [
+  { cmd: "unzip", args: (src, target) => ["-qq", "-o", src, "-d", target], skipFor: [".cbr"] },
+  { cmd: "bsdtar", args: (src, target) => ["-xf", src, "-C", target] },
+  { cmd: "7z", args: (src, target) => ["x", "-y", src, `-o${target}`] },
+  { cmd: "unrar", args: (src, target) => ["x", "-y", src, target] },
+];
 
 const PLACEHOLDER_VIDEO_THUMB =
   "iVBORw0KGgoAAAANSUhEUgAAAMgAAABkCAYAAAA/1nMpAAAACXBIWXMAAAsTAAALEwEAmpwYAAAB90lEQVR4nO3aMW7DMAxEUU9h/n+ru0WkGpI1QXysdbsIBNeDXnRJZ9gO5nH8GXKsgNFYwIAAAAAAAAAwP+vjvKK63q6u61n4Y/12DdsU/YPH5kcP7v2CnRfL7jf2Ke+bQtfdy+9gex+7xmt2n7gDf1p9g13s9bCO1Lr7zrzQNzIr3pv+ELxPfZPvUNU+yH7gIfrPN7b7vGtPvka9xz/Ht3q9Rt9az8jNH1q+7gA72z+7g6z6xW3eZ7fB7Ub1ptG8bZGzh64A7606ru1n8rftz2o3t3O7r1F9sGvdbv2Nyz7Q913b7z+pcupZbTqy71r4R17qmUO+4fvtz1FurGTy7W+1n7RnepZbTbqvDb/6nLqWW02qrdPf7jT3n0bxbqse5T7uvSvdY67Odb9rc2uQSjIVskhWSSpJFkkqSRZJKkkWSSpJFkkqSRZJKkkWSSpJFkkqSRZJKkkWSSpJFkkqSRZJKkkWSSpJFkkqSRZJKkkWSSpJFlEb6SFZJKkkWSSpJFkkqSRZJKkkWSSpJFkkqSRZJKkkWSSpJFkkqSRZJKkkWSSpJFkkqSRZJKkkWSSpJFlEX4nu6Gr7Xfxz7i/9c+q83hdbv4eAAAAAAAAAAD8esYLRG7zNRAAAAAASUVORK5CYII=";
@@ -181,17 +187,43 @@ function getArchiveExtractionTarget(relativePath, libraryId = "default") {
   return path.join(archiveExtractDir, hashPath(relativePath, libraryId));
 }
 
+function tryExtractArchive(archivePath, targetDir) {
+  ensureDir(targetDir);
+  const errors = [];
+  for (const extractor of ARCHIVE_EXTRACTORS) {
+    const ext = path.extname(archivePath).toLowerCase();
+    if (extractor.skipFor?.includes(ext)) {
+      continue;
+    }
+    try {
+      const result = spawnSync(extractor.cmd, extractor.args(archivePath, targetDir), {
+        stdio: "ignore",
+      });
+      if (result.status === 0) {
+        return { success: true };
+      }
+      if (result.error) {
+        errors.push(`${extractor.cmd}: ${result.error.message}`);
+      }
+    } catch (err) {
+      errors.push(`${extractor.cmd}: ${err.message}`);
+    }
+  }
+  return {
+    success: false,
+    error: errors.join("; ") || "No available extractor succeeded",
+  };
+}
+
 function ensureArchiveExtracted(absolutePath, relativePath, libraryId = "default") {
   ensureMediaDirs();
   const targetDir = getArchiveExtractionTarget(relativePath, libraryId);
-  ensureDir(targetDir);
-
-  const result = spawnSync("unzip", ["-qq", "-o", absolutePath, "-d", targetDir]);
-  if (result.status !== 0) {
+  const extracted = tryExtractArchive(absolutePath, targetDir);
+  if (!extracted.success) {
     throw new Error(
-      result.error
-        ? `Failed to extract archive: ${result.error.message}`
-        : "Failed to extract archive; ensure the file is a supported zip/CBZ and `unzip` is available.",
+      extracted.error
+        ? `Failed to extract archive; ensure the file is supported and an extractor like unzip/bsdtar is available. Details: ${extracted.error}`
+        : "Failed to extract archive; ensure the file is supported and an extractor like unzip/bsdtar is available.",
     );
   }
 
@@ -210,5 +242,6 @@ module.exports = {
   findSidecarSubtitles,
   hashPath,
   isIosFriendlyVideo,
+  tryExtractArchive,
   touchPath,
 };

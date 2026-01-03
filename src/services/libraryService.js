@@ -12,6 +12,7 @@ const {
   findSidecarSubtitles,
   getArchiveExtractionTarget,
   isIosFriendlyVideo,
+  tryExtractArchive,
   touchPath,
 } = require("./mediaProcessingService");
 const { ensureDir } = require("../utils/fileStore");
@@ -188,12 +189,11 @@ function extractNestedArchives(baseDir) {
       }
 
       const ext = path.extname(entry.name).toLowerCase();
-      if (!ARCHIVE_EXTS.has(ext) || ext === ".cbr") return;
+      if (!ARCHIVE_EXTS.has(ext)) return;
 
       const targetDir = path.join(baseDir, path.parse(entry.name).name);
-      ensureDir(targetDir);
-      const result = spawnSync("unzip", ["-qq", "-o", entryPath, "-d", targetDir]);
-      if (result.status === 0) {
+      const extraction = tryExtractArchive(entryPath, targetDir);
+      if (extraction.success) {
         extractNestedArchives(targetDir);
       }
     });
