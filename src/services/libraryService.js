@@ -1,6 +1,18 @@
 const fs = require("fs");
 const path = require("path");
-const { libraryDir } = require("../config");
+const { archiveExtractDir, libraryDir } = require("../config");
+const {
+  detectMediaKind,
+  ensureArchiveExtracted,
+  ensureArchiveThumbnail,
+  ensureIosReadyVideo,
+  ensureMediaDirs,
+  ensureVideoThumbnail,
+  findSidecarSubtitles,
+  getArchiveExtractionTarget,
+  isIosFriendlyVideo,
+  touchPath,
+} = require("./mediaProcessingService");
 
 const DEFAULT_CHUNK_SIZE = 1 * 1024 * 1024; // 1MB
 
@@ -18,12 +30,44 @@ function resolveLibraryPath(requestedPath = "") {
 
 function describeEntry(entryPath, dirent) {
   const stats = fs.statSync(entryPath);
-  return {
+  const relativePath = path.relative(libraryDir, entryPath);
+  const mediaKind = detectMediaKind(entryPath, dirent);
+  const base = {
     name: dirent.name,
-    path: path.relative(libraryDir, entryPath),
+    path: relativePath,
     type: dirent.isDirectory() ? "directory" : "file",
     size: stats.size,
     modifiedAt: stats.mtime.toISOString(),
+  };
+
+  if (mediaKind === "video") {
+    const thumbnailPath = ensureVideoThumbnail(entryPath, relativePath);
+    return {
+      ...base,
+      mediaKind,
+      iosOptimized: isIosFriendlyVideo(entryPath),
+      supportsAutoTranscode: true,
+      thumbnail: `/thumbnails/${path.basename(thumbnailPath)}`,
+      subtitles: findSidecarSubtitles(entryPath),
+    };
+  }
+
+  if (mediaKind === "archive") {
+    const thumbPath = ensureArchiveThumbnail(relativePath);
+    return {
+      ...base,
+      mediaKind,
+      thumbnail: `/thumbnails/${path.basename(thumbPath)}`,
+      extractionTarget: path.relative(
+        archiveExtractDir,
+        getArchiveExtractionTarget(relativePath),
+      ),
+    };
+  }
+
+  return {
+    ...base,
+    mediaKind,
   };
 }
 
@@ -37,6 +81,7 @@ function listDirectory(targetPath = "") {
     return { error: "Path is not a directory" };
   }
 
+  ensureMediaDirs();
   const entries = fs
     .readdirSync(absolute, { withFileTypes: true })
     .map((dirent) => describeEntry(path.join(absolute, dirent.name), dirent));
@@ -56,7 +101,11 @@ function getFileInfo(targetPath = "") {
   if (!stats.isFile()) {
     return { error: "Not a file" };
   }
-  return { absolute, stats, relativePath: path.relative(libraryDir, absolute) };
+  const relativePath = path.relative(libraryDir, absolute);
+  const mediaKind = detectMediaKind(absolute, {
+    isDirectory: () => false,
+  });
+  return { absolute, stats, relativePath, mediaKind };
 }
 
 function parseRange(rangeHeader, fileSize) {
@@ -72,4 +121,8 @@ module.exports = {
   listDirectory,
   getFileInfo,
   parseRange,
+  ensureArchiveExtracted,
+  ensureIosReadyVideo,
+  isIosFriendlyVideo,
+  touchPath,
 };

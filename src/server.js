@@ -4,6 +4,8 @@ const morgan = require("morgan");
 const path = require("path");
 const { port, storageDir } = require("./config");
 const { ensureDir } = require("./utils/fileStore");
+const { ensureMediaDirs } = require("./services/mediaProcessingService");
+const { startCacheCleanup } = require("./services/cacheService");
 const authRoutes = require("./routes/auth");
 const contentRoutes = require("./routes/content");
 const libraryRoutes = require("./routes/library");
@@ -11,6 +13,7 @@ const libraryRoutes = require("./routes/library");
 function bootstrap() {
   ensureDir(storageDir);
   ensureDir(path.join(storageDir, "media"));
+  ensureMediaDirs();
 
   const app = express();
 
@@ -22,6 +25,8 @@ function bootstrap() {
   app.get("/health", (_req, res) => res.json({ ok: true }));
 
   app.use("/media", express.static(path.join(storageDir, "media")));
+  app.use("/thumbnails", express.static(path.join(storageDir, "thumbnails")));
+  app.use("/extracted", express.static(path.join(storageDir, "extracted")));
   app.use("/api/auth", authRoutes);
   app.use("/api/content", contentRoutes);
   app.use("/api/library", libraryRoutes);
@@ -33,6 +38,8 @@ function bootstrap() {
   app.listen(port, () => {
     console.log(`MediaHive server listening on http://localhost:${port}`);
   });
+
+  startCacheCleanup();
 }
 
 bootstrap();
