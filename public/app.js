@@ -272,7 +272,13 @@ function handleVideo(item) {
   const video = document.createElement("video");
   video.controls = true;
   video.playsInline = true;
+  video.autoplay = true;
   video.src = `/api/library/stream?${params.toString()}`;
+  video.addEventListener("canplay", () => {
+    if (video.paused) {
+      video.play().catch(() => {});
+    }
+  });
   buildSubtitleTracks(video, item.subtitles || [], item.libraryId);
 
   elements.viewerKind.textContent = "비디오 스트리밍";

@@ -7,11 +7,11 @@ const {
   listDirectory,
   getFileInfo,
   parseRange,
+  buildArchivePages,
   ensureArchiveExtracted,
   ensureIosReadyVideo,
   isIosFriendlyVideo,
   touchPath,
-  listExtractedImages,
 } = require("../services/libraryService");
 
 const IMAGE_MIME_MAP = {
@@ -185,16 +185,17 @@ router.get("/archive/pages", (req, res) => {
   }
 
   try {
-    const extractedDir = ensureArchiveExtracted(
+    const { pages, extractedPath } = buildArchivePages(
       fileInfo.absolute,
       fileInfo.relativePath,
-      fileInfo.library.id,
+      fileInfo.library,
     );
-    const pages = listExtractedImages(extractedDir);
-    const base = path.relative(archiveExtractDir, extractedDir);
+    if (!pages.length || !extractedPath) {
+      return res.status(404).json({ message: "No pages found in archive" });
+    }
     return res.json({
-      pages: pages.map((page) => `/extracted/${path.join(base, page)}`),
-      extractedPath: base,
+      pages: pages.map((page) => `/extracted/${path.join(extractedPath, page)}`),
+      extractedPath,
     });
   } catch (err) {
     return res.status(500).json({ message: err.message });
