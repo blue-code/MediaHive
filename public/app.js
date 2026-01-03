@@ -49,12 +49,12 @@ function paintAuthState() {
   const user = storage.getItem("mediahiveUser");
   const parsedUser = user ? JSON.parse(user) : null;
   if (token && parsedUser) {
-    elements.authPill.textContent = `Signed in as ${parsedUser.username}`;
-    elements.tokenStatus.textContent = "Token active";
+    elements.authPill.textContent = `${parsedUser.username}로 로그인됨`;
+    elements.tokenStatus.textContent = "토큰 활성";
     elements.tokenStatus.classList.add("chip-flare");
   } else {
-    elements.authPill.textContent = "Guest mode · log in for full power";
-    elements.tokenStatus.textContent = "No token";
+    elements.authPill.textContent = "게스트 모드 · 로그인하면 모든 기능 사용 가능";
+    elements.tokenStatus.textContent = "토큰 없음";
     elements.tokenStatus.classList.remove("chip-flare");
   }
 }
@@ -101,7 +101,7 @@ function updateStats(items = []) {
 }
 
 function readingModeLabel(item) {
-  if (!item.navigation.readingMode) return "Mode needed";
+  if (!item.navigation.readingMode) return "모드 선택 필요";
   return item.navigation.readingMode.replace("archive-", "archive → ");
 }
 
@@ -126,18 +126,18 @@ function createCard(item) {
         </div>
         <div class="chip" style="color:${accent};border-color:${accent};">${readingModeLabel(item)}</div>
       </div>
-      <p class="description">${item.description || "No description yet"}</p>
-      ${item.url ? `<a class="button ghost" href="${item.url}" target="_blank">Open file</a>` : ""}
+      <p class="description">${item.description || "아직 설명이 없습니다"}</p>
+      ${item.url ? `<a class="button ghost" href="${item.url}" target="_blank">파일 열기</a>` : ""}
       <div class="card-actions">
         <select class="mode-select" data-id="${item.id}">
-          <option value="">auto</option>
+          <option value="">자동</option>
           <option value="paged">paged</option>
           <option value="webtoon">webtoon</option>
           <option value="archive-comic">archive-comic</option>
           <option value="archive-webtoon">archive-webtoon</option>
         </select>
-        <button class="button ghost" data-action="apply" data-id="${item.id}">Set mode</button>
-        <button class="button" data-action="delete" data-id="${item.id}">Delete</button>
+        <button class="button ghost" data-action="apply" data-id="${item.id}">모드 설정</button>
+        <button class="button" data-action="delete" data-id="${item.id}">삭제</button>
       </div>
     </div>`;
 
@@ -150,14 +150,14 @@ function createCard(item) {
 }
 
 async function loadContent() {
-  elements.contentGrid.innerHTML = "<p class='muted'>Loading catalog…</p>";
+  elements.contentGrid.innerHTML = "<p class='muted'>카탈로그를 불러오는 중…</p>";
   try {
     const data = await api("/content");
     const items = data.items || [];
     elements.contentGrid.innerHTML = "";
     items.forEach((item) => elements.contentGrid.append(createCard(item)));
     updateStats(items);
-    elements.lastUpdated.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    elements.lastUpdated.textContent = `${new Date().toLocaleTimeString()}에 업데이트`;
   } catch (err) {
     elements.contentGrid.innerHTML = `<p class='muted'>${err.message}</p>`;
   }
@@ -173,7 +173,7 @@ async function handleLogin(event) {
       body: JSON.stringify(payload),
     });
     setToken(data.token, data.user);
-    toast(`Welcome back, ${data.user.username}`);
+    toast(`${data.user.username}님, 다시 오신 것을 환영합니다`);
   } catch (err) {
     toast(err.message, "error");
   }
@@ -189,7 +189,7 @@ async function handleRegister(event) {
       body: JSON.stringify(payload),
     });
     setToken(data.token, data.user);
-    toast(`Account created for ${data.user.username}`);
+    toast(`${data.user.username} 계정을 만들었습니다`);
   } catch (err) {
     toast(err.message, "error");
   }
@@ -199,7 +199,7 @@ async function handleUpload(event) {
   event.preventDefault();
   const token = getToken();
   if (!token) {
-    toast("Login first to upload", "error");
+    toast("업로드하려면 먼저 로그인하세요", "error");
     return;
   }
 
@@ -209,7 +209,7 @@ async function handleUpload(event) {
       method: "POST",
       body: formData,
     });
-    toast("Upload complete. Catalog refreshed.");
+    toast("업로드 완료. 카탈로그를 새로고침했습니다.");
     elements.uploadForm.reset();
     await loadContent();
   } catch (err) {
@@ -225,10 +225,10 @@ async function handleContentAction(event) {
   const action = target.dataset.action;
 
   if (action === "delete") {
-    if (!confirm("Delete this item?")) return;
+    if (!confirm("이 항목을 삭제할까요?")) return;
     try {
       await api(`/content/${id}`, { method: "DELETE" });
-      toast("Item deleted");
+      toast("항목을 삭제했습니다");
       await loadContent();
     } catch (err) {
       toast(err.message, "error");
@@ -240,7 +240,7 @@ async function handleContentAction(event) {
     const select = card.querySelector(".mode-select");
     const mode = select.value;
     if (!mode) {
-      toast("Pick a reading mode first", "error");
+      toast("먼저 읽기 모드를 선택하세요", "error");
       return;
     }
     try {
@@ -248,7 +248,7 @@ async function handleContentAction(event) {
         method: "PATCH",
         body: JSON.stringify({ readingMode: mode }),
       });
-      toast("Reading mode updated");
+      toast("읽기 모드를 업데이트했습니다");
       await loadContent();
     } catch (err) {
       toast(err.message, "error");
@@ -270,7 +270,7 @@ async function browseLibrary() {
       `;
       elements.libraryList.append(div);
     });
-    toast("Library updated");
+    toast("라이브러리를 업데이트했습니다");
   } catch (err) {
     elements.libraryList.innerHTML = `<p class='muted'>${err.message}</p>`;
     toast(err.message, "error");
