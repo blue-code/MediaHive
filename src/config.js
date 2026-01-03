@@ -58,6 +58,7 @@ function getLibraryRoot(libraryId) {
 }
 
 module.exports = {
+  host: process.env.HOST || "0.0.0.0",
   port: process.env.PORT || 4000,
   jwtSecret: process.env.JWT_SECRET || "local-dev-secret",
   dataDir: process.env.DATA_DIR || path.join(ROOT_DIR, "data"),

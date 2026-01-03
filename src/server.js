@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
 const path = require("path");
-const { port, storageDir } = require("./config");
+const { host, port, storageDir } = require("./config");
 const { ensureDir } = require("./utils/fileStore");
 const { ensureMediaDirs } = require("./services/mediaProcessingService");
 const { startCacheCleanup } = require("./services/cacheService");
@@ -41,8 +41,9 @@ function bootstrap() {
     res.status(404).json({ message: `Route ${req.path} not found` });
   });
 
-  app.listen(port, () => {
-    console.log(`MediaHive server listening on http://localhost:${port}`);
+  app.listen(port, host, () => {
+    const displayHost = host === "0.0.0.0" ? "localhost" : host;
+    console.log(`MediaHive server listening on http://${displayHost}:${port}`);
   });
 
   startCacheCleanup();
