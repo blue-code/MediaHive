@@ -24,13 +24,15 @@ const elements = {
 };
 
 let currentArchiveContext = null;
+let currentImageIndex = 0;
+let currentImageList = [];
 
 function toast(message, variant = "info") {
   const div = document.createElement("div");
   div.className = `toast ${variant === "error" ? "error" : ""}`;
-  div.textContent = message;
+  div.innerHTML = message.replace(/\n/g, '<br>');
   elements.toaster.append(div);
-  setTimeout(() => div.remove(), 4000);
+  setTimeout(() => div.remove(), variant === "error" ? 8000 : 4000);
 }
 
 function getToken() {
@@ -231,6 +233,8 @@ function openViewer() {
 
 function closeViewer() {
   currentArchiveContext = null;
+  currentImageIndex = 0;
+  currentImageList = [];
   elements.viewer.classList.add("hidden");
   elements.viewerContent.innerHTML = "";
 }
@@ -288,6 +292,13 @@ function renderArchiveBreadcrumbs(context) {
 
 function renderArchiveBrowser(context) {
   currentArchiveContext = context;
+  
+  // Build image list for keyboard navigation
+  currentImageList = (context.items || [])
+    .filter(item => (item.mediaKind || item.type) === "image")
+    .map(item => ({ item, context }));
+  currentImageIndex = 0;
+  
   elements.viewerKind.textContent = "압축 탐색";
   elements.viewerTitle.textContent = context.archiveName || "압축 파일";
   const pathLabel = context.currentPath
@@ -347,6 +358,16 @@ function renderExtractedMedia(item, kind = "image") {
   elements.viewerKind.textContent = kind === "video" ? "비디오" : "이미지";
   elements.viewerTitle.textContent = item.name;
   elements.viewerPath.textContent = item.path || "";
+  
+  // Update current index if navigating within the image list
+  if (kind === "image" && currentImageList.length > 0) {
+    const foundIndex = currentImageList.findIndex(entry => 
+      entry.item.path === item.path && entry.item.name === item.name
+    );
+    if (foundIndex !== -1) {
+      currentImageIndex = foundIndex;
+    }
+  }
 
   const wrapper = document.createElement("div");
   wrapper.className = "extracted-media";
@@ -501,6 +522,19 @@ function handleDirectory(item) {
 
 function handleImage(item) {
   currentArchiveContext = null;
+  
+  // Build image list from currently displayed library items for keyboard navigation
+  const libraryImages = Array.from(document.querySelectorAll('.media-card[data-kind="image"]'))
+    .map(card => ({
+      path: card.dataset.path,
+      libraryId: card.dataset.library,
+      name: card.querySelector('.media-title')?.textContent || '',
+    }));
+  
+  currentImageList = libraryImages.map(img => ({ item: img, context: null }));
+  currentImageIndex = currentImageList.findIndex(entry => entry.item.path === item.path);
+  if (currentImageIndex === -1) currentImageIndex = 0;
+  
   const params = new URLSearchParams();
   params.set("path", item.path);
   if (item.libraryId) params.set("library", item.libraryId);
@@ -545,6 +579,45 @@ function handleOpenItem(item) {
   return handleFile(item);
 }
 
+function navigateToNextImage() {
+  if (currentImageList.length === 0) return;
+  currentImageIndex = (currentImageIndex + 1) % currentImageList.length;
+  const { item, context } = currentImageList[currentImageIndex];
+  if (context) {
+    renderExtractedMedia(item, "image");
+  } else {
+    handleImage(item);
+  }
+}
+
+function navigateToPreviousImage() {
+  if (currentImageList.length === 0) return;
+  currentImageIndex = (currentImageIndex - 1 + currentImageList.length) % currentImageList.length;
+  const { item, context } = currentImageList[currentImageIndex];
+  if (context) {
+    renderExtractedMedia(item, "image");
+  } else {
+    handleImage(item);
+  }
+}
+
+function setupKeyboardNavigation() {
+  document.addEventListener('keydown', (event) => {
+    if (!elements.viewer.classList.contains('hidden')) {
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        navigateToPreviousImage();
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        navigateToNextImage();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        closeViewer();
+      }
+    }
+  });
+}
+
 async function handleLogin(event) {
   event.preventDefault();
   const formData = new FormData(event.target);
@@ -564,6 +637,7 @@ async function handleLogin(event) {
 
 function init() {
   paintAuthState();
+  setupKeyboardNavigation();
   if (!getToken()) {
     clearLibraryView();
   }
