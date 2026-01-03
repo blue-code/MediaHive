@@ -32,9 +32,11 @@ LIBRARY_DIR=./library   # folder containing epubs, videos, zip comics, etc.
 - `POST /api/auth/login` — login and receive JWT token.
 - `GET /api/content` — list content (public).
 - `GET /api/content/:id` — fetch content metadata by id.
-- `POST /api/content` — create metadata entry (protected). Body: `{ "title": "...", "type": "video|image|epub|...", "description": "..." }`
-- `POST /api/content/upload` — upload a file to local disk (protected). Form-data: `file` + optional `title`, `type`, `description`. Returns the created content record with file path.
+- `POST /api/content` — create metadata entry (protected). Body: `{ "title": "...", "type": "video|image|epub|...", "description": "...", "readingMode": "paged|webtoon|archive-comic|archive-webtoon" }`
+- `POST /api/content/upload` — upload a file to local disk (protected). Form-data: `file` + optional `title`, `type`, `description`, `readingMode`. Returns the created content record with file path.
 - `DELETE /api/content/:id` — delete content and its file (protected).
+- `PATCH /api/content/:id/navigation` — set a reading mode (`paged`, `webtoon`, `archive-comic`, or `archive-webtoon`) so keyboard shortcuts can be attached to compressed comics/webtoons (protected).
+- `GET /api/content/:id/shortcuts` — fetch the derived keyboard shortcut mapping for a content item, including whether archive items still require a mode selection.
 - `GET /api/library/browse?path=` — browse the configured library directory (mix of videos, epubs, zip comics, etc.). `path` is relative to `LIBRARY_DIR` (omit for root).
 - `GET /api/library/stream?path=` — stream any file inside the library directory (supports HTTP Range for videos). Supply `path` relative to `LIBRARY_DIR`.
 
@@ -45,3 +47,9 @@ Authorization: send `Authorization: Bearer <token>` for protected routes.
 - Passwords are hashed with Node's built-in PBKDF2 before being stored in `data/users.json`.
 - Seed script creates a `demo` user with password `password123` and a placeholder content row.
 - Replace `scripts/lint-placeholder.js` with ESLint/TypeScript linting when expanding the project.
+
+## Keyboard navigation (comics & webtoons)
+
+- Arrow keys are reserved for navigation: `ArrowLeft` and `ArrowRight` move to the previous/next page.
+- Webtoon reading modes also wire `ArrowUp`/`ArrowDown` to previous/next within the visible viewport so vertical scrolling only advances what is on screen.
+- Compressed comics/webtoons (CBZ/ZIP archives) must pick a reading mode (`archive-comic` or `archive-webtoon`) via `PATCH /api/content/:id/navigation` before shortcuts can be attached. Regular entries default to `paged`, and types containing `webtoon` default to `webtoon`.
