@@ -2,6 +2,7 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const { archiveExtractDir, libraryDir } = require("../config");
+const authMiddleware = require("../middleware/auth");
 const {
   listDirectory,
   getFileInfo,
@@ -13,6 +14,8 @@ const {
 } = require("../services/libraryService");
 
 const router = express.Router();
+
+router.use(authMiddleware);
 
 router.get("/browse", (req, res) => {
   const targetPath = req.query.path || "";
