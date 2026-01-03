@@ -11,7 +11,6 @@ const elements = {
   authPill: document.getElementById("auth-pill"),
   librarySelect: document.getElementById("library-select"),
   libraryPath: document.getElementById("library-path"),
-  browseButton: document.getElementById("browse"),
   libraryInfo: document.getElementById("library-info"),
   libraryGrid: document.getElementById("library-grid"),
   toaster: document.getElementById("toaster"),
@@ -42,7 +41,7 @@ function clearLibraryView() {
   }
   storage.removeItem(LIBRARY_STORAGE_KEY);
   if (elements.libraryInfo) {
-    elements.libraryInfo.textContent = "로그인 후 라이브러리의 미디어를 썸네일로 불러올 수 있습니다.";
+    elements.libraryInfo.textContent = "로그인 후 라이브러리의 미디어가 자동으로 로드됩니다.";
   }
   if (elements.libraryGrid) {
     elements.libraryGrid.innerHTML = "<p class='muted'>라이브러리를 보려면 로그인하세요.</p>";
@@ -358,7 +357,6 @@ function init() {
     clearLibraryView();
   }
   elements.loginForm.addEventListener("submit", handleLogin);
-  elements.browseButton.addEventListener("click", browseLibrary);
   elements.viewerClose.addEventListener("click", closeViewer);
   elements.viewerBackdrop.addEventListener("click", closeViewer);
   if (elements.librarySelect) {
@@ -368,6 +366,16 @@ function init() {
         storage.setItem(LIBRARY_STORAGE_KEY, selected);
       } else {
         storage.removeItem(LIBRARY_STORAGE_KEY);
+      }
+      browseLibrary();
+    });
+  }
+  if (elements.libraryPath) {
+    elements.libraryPath.addEventListener("change", browseLibrary);
+    elements.libraryPath.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        browseLibrary();
       }
     });
   }
