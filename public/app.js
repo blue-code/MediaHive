@@ -33,6 +33,19 @@ function getToken() {
   return storage.getItem("mediahiveToken") || "";
 }
 
+function clearLibraryView() {
+  if (elements.librarySelect) {
+    elements.librarySelect.innerHTML = "";
+  }
+  storage.removeItem(LIBRARY_STORAGE_KEY);
+  if (elements.libraryInfo) {
+    elements.libraryInfo.textContent = "로그인 후 라이브러리의 미디어를 썸네일로 불러올 수 있습니다.";
+  }
+  if (elements.libraryGrid) {
+    elements.libraryGrid.innerHTML = "<p class='muted'>라이브러리를 보려면 로그인하세요.</p>";
+  }
+}
+
 function setToken(token, user) {
   if (token) {
     storage.setItem("mediahiveToken", token);
@@ -40,6 +53,7 @@ function setToken(token, user) {
   } else {
     storage.removeItem("mediahiveToken");
     storage.removeItem("mediahiveUser");
+    clearLibraryView();
   }
   paintAuthState();
 }
@@ -71,6 +85,9 @@ async function api(path, options = {}) {
 
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!response.ok) {
+    if (response.status === 401) {
+      setToken("", null);
+    }
     let message = `Request failed (${response.status})`;
     try {
       const data = await response.json();
@@ -299,6 +316,9 @@ async function handleLogin(event) {
 
 function init() {
   paintAuthState();
+  if (!getToken()) {
+    clearLibraryView();
+  }
   elements.loginForm.addEventListener("submit", handleLogin);
   elements.browseButton.addEventListener("click", browseLibrary);
   elements.viewerClose.addEventListener("click", closeViewer);
