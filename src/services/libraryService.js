@@ -105,7 +105,7 @@ function describeEntry(entryPath, dirent, root) {
   };
 
   if (mediaKind === "directory") {
-    const firstImage = findFirstImage(entryPath);
+    const firstImage = findFirstImageInDir(entryPath);
     const thumbnail = firstImage 
       ? `/thumbnails/${path.basename(ensureDirectoryThumbnail(firstImage, relativePath, root.id))}`
       : null;
@@ -258,27 +258,6 @@ function sanitizeSubpath(subpath = "") {
   return normalized;
 }
 
-function findFirstImage(targetDir) {
-  try {
-    const entries = fs.readdirSync(targetDir, { withFileTypes: true });
-    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))) {
-      const entryPath = path.join(targetDir, entry.name);
-      if (entry.isDirectory()) {
-        const nested = findFirstImage(entryPath);
-        if (nested) return nested;
-      } else {
-        const ext = path.extname(entry.name).toLowerCase();
-        if (IMAGE_EXTS.has(ext)) {
-          return entryPath;
-        }
-      }
-    }
-  } catch (_err) {
-    // ignore directories we can't read
-  }
-  return null;
-}
-
 function describeExtractedEntry(entryPath, dirent, extractionRoot, relativeRootPath, libraryId = "extracted") {
   const stats = fs.statSync(entryPath);
   const relativePath = path.relative(extractionRoot, entryPath);
@@ -294,7 +273,7 @@ function describeExtractedEntry(entryPath, dirent, extractionRoot, relativeRootP
   };
 
   if (dirent.isDirectory()) {
-    const firstImage = findFirstImage(entryPath);
+    const firstImage = findFirstImageInDir(entryPath);
     const thumbnail = firstImage
       ? `/extracted/${path.join(relativeRootPath, path.relative(extractionRoot, firstImage))}`
       : null;
