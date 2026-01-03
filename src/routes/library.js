@@ -10,6 +10,7 @@ const {
   ensureIosReadyVideo,
   isIosFriendlyVideo,
   touchPath,
+  listExtractedImages,
 } = require("../services/libraryService");
 
 const router = express.Router();
@@ -139,6 +140,45 @@ router.post("/archive/extract", (req, res) => {
     );
     const relativeExtracted = path.relative(archiveExtractDir, extracted);
     return res.json({ extractedPath: relativeExtracted });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+});
+
+router.get("/archive/pages", (req, res) => {
+  const targetPath = req.query.path;
+  const libraryId = req.query.library;
+  if (!targetPath) {
+    return res.status(400).json({ message: "path query parameter is required" });
+  }
+
+  let fileInfo;
+  try {
+    fileInfo = getFileInfo(targetPath, libraryId);
+  } catch (err) {
+    return res.status(400).json({ message: err.message });
+  }
+
+  if (fileInfo.error) {
+    return res.status(404).json({ message: fileInfo.error });
+  }
+
+  if (fileInfo.mediaKind !== "archive") {
+    return res.status(400).json({ message: "Target is not an archive" });
+  }
+
+  try {
+    const extractedDir = ensureArchiveExtracted(
+      fileInfo.absolute,
+      fileInfo.relativePath,
+      fileInfo.library.id,
+    );
+    const pages = listExtractedImages(extractedDir);
+    const base = path.relative(archiveExtractDir, extractedDir);
+    return res.json({
+      pages: pages.map((page) => `/extracted/${path.join(base, page)}`),
+      extractedPath: base,
+    });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }

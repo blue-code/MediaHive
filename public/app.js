@@ -3,25 +3,22 @@ const storage = window.localStorage;
 const LIBRARY_STORAGE_KEY = "mediahiveLibraryId";
 
 const elements = {
-  authPill: document.getElementById("auth-pill"),
-  tokenStatus: document.getElementById("token-status"),
-  statContent: document.getElementById("stat-content"),
-  statLinked: document.getElementById("stat-linked"),
-  statReady: document.getElementById("stat-ready"),
-  contentGrid: document.getElementById("content-grid"),
-  refresh: document.getElementById("refresh"),
-  uploadForm: document.getElementById("upload-form"),
   loginForm: document.getElementById("login-form"),
-  registerForm: document.getElementById("register-form"),
-  toaster: document.getElementById("toaster"),
-  lastUpdated: document.getElementById("last-updated"),
-  libraryPath: document.getElementById("library-path"),
-  libraryList: document.getElementById("library-list"),
+  tokenStatus: document.getElementById("token-status"),
+  authPill: document.getElementById("auth-pill"),
   librarySelect: document.getElementById("library-select"),
-  libraryInfo: document.getElementById("library-info"),
+  libraryPath: document.getElementById("library-path"),
   browseButton: document.getElementById("browse"),
-  dropzone: document.getElementById("dropzone"),
-  fileInput: document.getElementById("file-input"),
+  libraryInfo: document.getElementById("library-info"),
+  libraryGrid: document.getElementById("library-grid"),
+  toaster: document.getElementById("toaster"),
+  viewer: document.getElementById("viewer"),
+  viewerBackdrop: document.getElementById("viewer-backdrop"),
+  viewerClose: document.getElementById("viewer-close"),
+  viewerContent: document.getElementById("viewer-content"),
+  viewerTitle: document.getElementById("viewer-title"),
+  viewerKind: document.getElementById("viewer-kind"),
+  viewerPath: document.getElementById("viewer-path"),
 };
 
 function toast(message, variant = "info") {
@@ -29,7 +26,7 @@ function toast(message, variant = "info") {
   div.className = `toast ${variant === "error" ? "error" : ""}`;
   div.textContent = message;
   elements.toaster.append(div);
-  setTimeout(() => div.remove(), 4200);
+  setTimeout(() => div.remove(), 4000);
 }
 
 function getToken() {
@@ -50,13 +47,13 @@ function setToken(token, user) {
 function paintAuthState() {
   const token = getToken();
   const user = storage.getItem("mediahiveUser");
-  const parsedUser = user ? JSON.parse(user) : null;
-  if (token && parsedUser) {
-    elements.authPill.textContent = `${parsedUser.username}로 로그인됨`;
+  const parsed = user ? JSON.parse(user) : null;
+  if (token && parsed) {
+    elements.authPill.textContent = `${parsed.username}로 로그인됨`;
     elements.tokenStatus.textContent = "토큰 활성";
     elements.tokenStatus.classList.add("chip-flare");
   } else {
-    elements.authPill.textContent = "게스트 모드 · 로그인하면 모든 기능 사용 가능";
+    elements.authPill.textContent = "로그인이 필요합니다";
     elements.tokenStatus.textContent = "토큰 없음";
     elements.tokenStatus.classList.remove("chip-flare");
   }
@@ -72,18 +69,14 @@ async function api(path, options = {}) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
-
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
     try {
       const data = await response.json();
       message = data.message || message;
-    } catch (err) {
-      // ignore parse error
+    } catch (_err) {
+      // ignore
     }
     throw new Error(message);
   }
@@ -93,26 +86,6 @@ async function api(path, options = {}) {
     return response.json();
   }
   return response.text();
-}
-
-function updateStats(items = []) {
-  const linked = items.filter((i) => i.url).length;
-  const ready = items.filter((i) => i.navigation && i.navigation.readingMode).length;
-  elements.statContent.textContent = items.length;
-  elements.statLinked.textContent = linked;
-  elements.statReady.textContent = ready;
-}
-
-function readingModeLabel(item) {
-  if (!item.navigation.readingMode) return "모드 선택 필요";
-  return item.navigation.readingMode.replace("archive-", "archive → ");
-}
-
-function contentAccent(type = "") {
-  if (type.includes("webtoon")) return "var(--accent-2)";
-  if (type.includes("archive")) return "var(--accent-3)";
-  if (type.includes("video")) return "var(--accent)";
-  return "#fff";
 }
 
 function selectedLibraryId() {
@@ -157,55 +130,154 @@ function renderLibraryInfo(libraryRoot, currentPath) {
   elements.libraryInfo.textContent = `${libraryRoot.name} (${libraryRoot.path}) · 현재 경로: ${label}`;
 }
 
-function createCard(item) {
-  const card = document.createElement("article");
-  card.className = "content-card";
-  const accent = contentAccent(item.type.toLowerCase());
-
-  card.innerHTML = `
-    <div class="meta">
-      <div class="title-row">
-        <div>
-          <div class="badge" style="border-color:${accent};color:${accent}">${item.type}</div>
-          <h3>${item.title}</h3>
-        </div>
-        <div class="chip" style="color:${accent};border-color:${accent};">${readingModeLabel(item)}</div>
-      </div>
-      <p class="description">${item.description || "아직 설명이 없습니다"}</p>
-      ${item.url ? `<a class="button ghost" href="${item.url}" target="_blank">파일 열기</a>` : ""}
-      <div class="card-actions">
-        <select class="mode-select" data-id="${item.id}">
-          <option value="">자동</option>
-          <option value="paged">paged</option>
-          <option value="webtoon">webtoon</option>
-          <option value="archive-comic">archive-comic</option>
-          <option value="archive-webtoon">archive-webtoon</option>
-        </select>
-        <button class="button ghost" data-action="apply" data-id="${item.id}">모드 설정</button>
-        <button class="button" data-action="delete" data-id="${item.id}">삭제</button>
-      </div>
-    </div>`;
-
-  const modeSelect = card.querySelector(".mode-select");
-  if (item.navigation.readingMode) {
-    modeSelect.value = item.navigation.readingMode;
-  }
-  modeSelect.dataset.type = item.type;
-  return card;
+function cardThumbnail(item) {
+  if (item.thumbnail) return item.thumbnail;
+  if (item.mediaKind === "directory") return "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='300' fill='none' stroke='%23ffffff55'><rect x='40' y='70' width='320' height='180' rx='20' ry='20' stroke-width='10'/><path d='M80 110h240' stroke-width='10'/></svg>";
+  return "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='300' fill='none' stroke='%23ffffff55'><rect x='90' y='40' width='220' height='220' rx='30' ry='30' stroke-width='12'/></svg>";
 }
 
-async function loadContent() {
-  elements.contentGrid.innerHTML = "<p class='muted'>카탈로그를 불러오는 중…</p>";
-  try {
-    const data = await api("/content");
-    const items = data.items || [];
-    elements.contentGrid.innerHTML = "";
-    items.forEach((item) => elements.contentGrid.append(createCard(item)));
-    updateStats(items);
-    elements.lastUpdated.textContent = `${new Date().toLocaleTimeString()}에 업데이트`;
-  } catch (err) {
-    elements.contentGrid.innerHTML = `<p class='muted'>${err.message}</p>`;
+function renderLibraryItems(items = []) {
+  elements.libraryGrid.innerHTML = "";
+  if (!items.length) {
+    elements.libraryGrid.innerHTML = "<p class='muted'>표시할 항목이 없습니다.</p>";
+    return;
   }
+
+  items.forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "media-card";
+    card.dataset.path = item.path;
+    card.dataset.library = item.libraryId;
+    card.dataset.kind = item.mediaKind || item.type;
+
+    card.innerHTML = `
+      <img class="thumb" src="${cardThumbnail(item)}" alt="${item.name}" loading="lazy" />
+      <div class="media-meta">
+        <p class="media-title">${item.name}</p>
+        <span class="badge">${item.mediaKind || item.type}</span>
+      </div>
+    `;
+
+    card.addEventListener("click", () => handleOpenItem(item));
+    elements.libraryGrid.append(card);
+  });
+}
+
+async function browseLibrary() {
+  const token = getToken();
+  if (!token) {
+    toast("로그인 후 라이브러리를 불러올 수 있습니다.", "error");
+    return;
+  }
+  const path = elements.libraryPath.value.trim();
+  const library = selectedLibraryId();
+  const params = new URLSearchParams();
+  if (path) params.set("path", path);
+  if (library) params.set("library", library);
+  try {
+    const query = params.toString();
+    const data = await api(`/library/browse${query ? `?${query}` : ""}`);
+    setLibraryOptions(data.libraryRoots || [], data.libraryRoot?.id);
+    renderLibraryInfo(data.libraryRoot, data.currentPath);
+    renderLibraryItems(data.items || []);
+    toast("라이브러리를 불러왔습니다.");
+  } catch (err) {
+    elements.libraryGrid.innerHTML = `<p class='muted'>${err.message}</p>`;
+    toast(err.message, "error");
+  }
+}
+
+function openViewer() {
+  elements.viewer.classList.remove("hidden");
+}
+
+function closeViewer() {
+  elements.viewer.classList.add("hidden");
+  elements.viewerContent.innerHTML = "";
+}
+
+async function handleArchive(item) {
+  try {
+    const params = new URLSearchParams();
+    params.set("path", item.path);
+    if (item.libraryId) params.set("library", item.libraryId);
+    const data = await api(`/library/archive/pages?${params.toString()}`);
+    elements.viewerKind.textContent = "압축 만화";
+    elements.viewerTitle.textContent = item.name;
+    elements.viewerPath.textContent = item.path;
+
+    const list = document.createElement("div");
+    list.className = "page-list";
+    data.pages.forEach((url) => {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = item.name;
+      list.append(img);
+    });
+    elements.viewerContent.innerHTML = "";
+    elements.viewerContent.append(list);
+    openViewer();
+  } catch (err) {
+    toast(err.message, "error");
+  }
+}
+
+function buildSubtitleTracks(videoEl, subtitles = [], libraryId) {
+  subtitles.forEach((sub) => {
+    const url = `/api/library/stream?path=${encodeURIComponent(sub)}${
+      libraryId ? `&library=${encodeURIComponent(libraryId)}` : ""
+    }`;
+    const track = document.createElement("track");
+    track.kind = "subtitles";
+    track.src = url;
+    track.srclang = "ko";
+    track.label = "자막";
+    videoEl.append(track);
+  });
+}
+
+function handleVideo(item) {
+  const params = new URLSearchParams();
+  params.set("path", item.path);
+  if (item.libraryId) params.set("library", item.libraryId);
+  params.set("ios", "true");
+
+  const video = document.createElement("video");
+  video.controls = true;
+  video.playsInline = true;
+  video.src = `/api/library/stream?${params.toString()}`;
+  buildSubtitleTracks(video, item.subtitles || [], item.libraryId);
+
+  elements.viewerKind.textContent = "비디오 스트리밍";
+  elements.viewerTitle.textContent = item.name;
+  elements.viewerPath.textContent = item.path;
+  elements.viewerContent.innerHTML = "";
+  elements.viewerContent.append(video);
+  openViewer();
+}
+
+function handleDirectory(item) {
+  elements.libraryPath.value = item.path;
+  browseLibrary();
+}
+
+function handleFile(item) {
+  const params = new URLSearchParams();
+  params.set("path", item.path);
+  if (item.libraryId) params.set("library", item.libraryId);
+  const link = document.createElement("a");
+  link.href = `/api/library/stream?${params.toString()}`;
+  link.target = "_blank";
+  link.rel = "noopener";
+  link.click();
+}
+
+function handleOpenItem(item) {
+  const kind = item.mediaKind || item.type;
+  if (kind === "directory") return handleDirectory(item);
+  if (kind === "video") return handleVideo(item);
+  if (kind === "archive") return handleArchive(item);
+  return handleFile(item);
 }
 
 async function handleLogin(event) {
@@ -218,164 +290,19 @@ async function handleLogin(event) {
       body: JSON.stringify(payload),
     });
     setToken(data.token, data.user);
-    toast(`${data.user.username}님, 다시 오신 것을 환영합니다`);
+    toast(`${data.user.username}님 환영합니다.`);
+    browseLibrary();
   } catch (err) {
     toast(err.message, "error");
   }
-}
-
-async function handleRegister(event) {
-  event.preventDefault();
-  const formData = new FormData(event.target);
-  const payload = Object.fromEntries(formData.entries());
-  try {
-    const data = await api("/auth/register", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    setToken(data.token, data.user);
-    toast(`${data.user.username} 계정을 만들었습니다`);
-  } catch (err) {
-    toast(err.message, "error");
-  }
-}
-
-async function handleUpload(event) {
-  event.preventDefault();
-  const token = getToken();
-  if (!token) {
-    toast("업로드하려면 먼저 로그인하세요", "error");
-    return;
-  }
-
-  const formData = new FormData(elements.uploadForm);
-  try {
-    await api("/content/upload", {
-      method: "POST",
-      body: formData,
-    });
-    toast("업로드 완료. 카탈로그를 새로고침했습니다.");
-    elements.uploadForm.reset();
-    await loadContent();
-  } catch (err) {
-    toast(err.message, "error");
-  }
-}
-
-async function handleContentAction(event) {
-  const target = event.target.closest("button");
-  if (!target) return;
-  const id = target.dataset.id;
-  if (!id) return;
-  const action = target.dataset.action;
-
-  if (action === "delete") {
-    if (!confirm("이 항목을 삭제할까요?")) return;
-    try {
-      await api(`/content/${id}`, { method: "DELETE" });
-      toast("항목을 삭제했습니다");
-      await loadContent();
-    } catch (err) {
-      toast(err.message, "error");
-    }
-  }
-
-  if (action === "apply") {
-    const card = target.closest(".content-card");
-    const select = card.querySelector(".mode-select");
-    const mode = select.value;
-    if (!mode) {
-      toast("먼저 읽기 모드를 선택하세요", "error");
-      return;
-    }
-    try {
-      await api(`/content/${id}/navigation`, {
-        method: "PATCH",
-        body: JSON.stringify({ readingMode: mode }),
-      });
-      toast("읽기 모드를 업데이트했습니다");
-      await loadContent();
-    } catch (err) {
-      toast(err.message, "error");
-    }
-  }
-}
-
-async function browseLibrary() {
-  const path = elements.libraryPath.value.trim();
-  const library = selectedLibraryId();
-  const params = new URLSearchParams();
-  if (path) params.set("path", path);
-  if (library) params.set("library", library);
-  try {
-    const query = params.toString();
-    const data = await api(`/library/browse${query ? `?${query}` : ""}`);
-    setLibraryOptions(data.libraryRoots || [], data.libraryRoot?.id);
-    renderLibraryInfo(data.libraryRoot, data.currentPath);
-    elements.libraryList.innerHTML = "";
-    const items = data.items || [];
-    if (!items.length) {
-      elements.libraryList.innerHTML = "<p class='muted'>항목이 없습니다.</p>";
-    }
-    items.forEach((item) => {
-      const div = document.createElement("div");
-      div.className = "library-item";
-      div.innerHTML = `
-        <div class="path">${item.name}</div>
-        <div class="muted">${item.type} · ${item.size}</div>
-      `;
-      elements.libraryList.append(div);
-    });
-    toast("라이브러리를 업데이트했습니다");
-  } catch (err) {
-    elements.libraryList.innerHTML = `<p class='muted'>${err.message}</p>`;
-    toast(err.message, "error");
-  }
-}
-
-function enableDropzone() {
-  elements.dropzone.addEventListener("click", () => elements.fileInput.click());
-  ["dragenter", "dragover"].forEach((evt) =>
-    elements.dropzone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      elements.dropzone.style.borderColor = "var(--accent)";
-    }),
-  );
-  ["dragleave", "drop"].forEach((evt) =>
-    elements.dropzone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      elements.dropzone.style.borderColor = "rgba(255,255,255,0.2)";
-    }),
-  );
-  elements.dropzone.addEventListener("drop", (event) => {
-    event.preventDefault();
-    if (event.dataTransfer.files.length) {
-      elements.fileInput.files = event.dataTransfer.files;
-    }
-  });
-}
-
-function wireScrollButtons() {
-  document.querySelectorAll("[data-scroll]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.scroll;
-      const target = document.getElementById(id);
-      if (target) target.scrollIntoView({ behavior: "smooth" });
-    });
-  });
 }
 
 function init() {
   paintAuthState();
-  loadContent();
   elements.loginForm.addEventListener("submit", handleLogin);
-  elements.registerForm.addEventListener("submit", handleRegister);
-  elements.uploadForm.addEventListener("submit", handleUpload);
-  elements.refresh.addEventListener("click", loadContent);
-  elements.contentGrid.addEventListener("click", handleContentAction);
   elements.browseButton.addEventListener("click", browseLibrary);
-  enableDropzone();
-  wireScrollButtons();
+  elements.viewerClose.addEventListener("click", closeViewer);
+  elements.viewerBackdrop.addEventListener("click", closeViewer);
   if (elements.librarySelect) {
     elements.librarySelect.addEventListener("change", () => {
       const selected = elements.librarySelect.value;
@@ -386,7 +313,9 @@ function init() {
       }
     });
   }
-  browseLibrary();
+  if (getToken()) {
+    browseLibrary();
+  }
 }
 
 window.addEventListener("DOMContentLoaded", init);
