@@ -1,8 +1,16 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
-const { libraryDir } = require("../config");
-const { listDirectory, getFileInfo, parseRange } = require("../services/libraryService");
+const { archiveExtractDir, libraryDir } = require("../config");
+const {
+  listDirectory,
+  getFileInfo,
+  parseRange,
+  ensureArchiveExtracted,
+  ensureIosReadyVideo,
+  isIosFriendlyVideo,
+  touchPath,
+} = require("../services/libraryService");
 
 const router = express.Router();
 
@@ -40,18 +48,42 @@ router.get("/stream", (req, res) => {
     return res.status(404).json({ message: fileInfo.error });
   }
 
-  const { absolute, stats } = fileInfo;
+  const { absolute, relativePath, mediaKind } = fileInfo;
+  let { stats } = fileInfo;
+  let streamPath = absolute;
+  let contentType = req.query.contentType || "application/octet-stream";
+
+  if (mediaKind === "video") {
+    const forceTranscode =
+      req.query.transcode === "true" ||
+      req.query.ios === "true" ||
+      req.query.optimize === "ios" ||
+      !isIosFriendlyVideo(absolute);
+    const prepared = ensureIosReadyVideo(absolute, relativePath, forceTranscode);
+    if (prepared.error) {
+      return res.status(500).json({ message: prepared.error });
+    }
+    streamPath = prepared.path;
+    stats = fs.statSync(streamPath);
+    contentType = prepared.contentType || "video/mp4";
+    touchPath(streamPath);
+  }
+
+  if (mediaKind === "subtitle") {
+    contentType = contentType || "text/plain";
+  }
+
   const range = parseRange(req.headers.range, stats.size);
 
   if (range) {
     const { start, end } = range;
     const chunkSize = end - start + 1;
-    const stream = fs.createReadStream(absolute, { start, end });
+    const stream = fs.createReadStream(streamPath, { start, end });
     res.writeHead(206, {
       "Content-Range": `bytes ${start}-${end}/${stats.size}`,
       "Accept-Ranges": "bytes",
       "Content-Length": chunkSize,
-      "Content-Type": req.query.contentType || "application/octet-stream",
+      "Content-Type": contentType,
     });
     return stream.pipe(res);
   }
@@ -59,9 +91,43 @@ router.get("/stream", (req, res) => {
   const options = {
     headers: {
       "Content-Length": stats.size,
+      "Content-Type": contentType,
     },
   };
-  return res.sendFile(path.basename(absolute), { root: path.dirname(absolute), ...options });
+  return res.sendFile(path.basename(streamPath), {
+    root: path.dirname(streamPath),
+    ...options,
+  });
+});
+
+router.post("/archive/extract", (req, res) => {
+  const targetPath = req.body.path || req.query.path;
+  if (!targetPath) {
+    return res.status(400).json({ message: "path is required" });
+  }
+
+  let fileInfo;
+  try {
+    fileInfo = getFileInfo(targetPath);
+  } catch (err) {
+    return res.status(400).json({ message: err.message });
+  }
+
+  if (fileInfo.error) {
+    return res.status(404).json({ message: fileInfo.error });
+  }
+
+  if (fileInfo.mediaKind !== "archive") {
+    return res.status(400).json({ message: "Target is not an archive" });
+  }
+
+  try {
+    const extracted = ensureArchiveExtracted(fileInfo.absolute, fileInfo.relativePath);
+    const relativeExtracted = path.relative(archiveExtractDir, extracted);
+    return res.json({ extractedPath: relativeExtracted });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
 });
 
 module.exports = router;

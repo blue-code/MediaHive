@@ -24,6 +24,11 @@ JWT_SECRET=your-secret
 DATA_DIR=./data
 STORAGE_DIR=./storage
 LIBRARY_DIR=./library   # folder containing epubs, videos, zip comics, etc.
+THUMBNAIL_DIR=./storage/thumbnails
+ARCHIVE_EXTRACT_DIR=./storage/extracted
+TRANSCODED_DIR=./storage/transcoded
+CACHE_TTL_HOURS=6
+CACHE_CLEANUP_INTERVAL_MINUTES=30
 ```
 
 ## API overview
@@ -39,6 +44,11 @@ LIBRARY_DIR=./library   # folder containing epubs, videos, zip comics, etc.
 - `GET /api/content/:id/shortcuts` — fetch the derived keyboard shortcut mapping for a content item, including whether archive items still require a mode selection.
 - `GET /api/library/browse?path=` — browse the configured library directory (mix of videos, epubs, zip comics, etc.). `path` is relative to `LIBRARY_DIR` (omit for root).
 - `GET /api/library/stream?path=` — stream any file inside the library directory (supports HTTP Range for videos). Supply `path` relative to `LIBRARY_DIR`.
+- `POST /api/library/archive/extract` — extract a CBZ/ZIP archive for comics into the configured extraction directory. Body or query: `path` relative to `LIBRARY_DIR`.
+
+Static helpers:
+- Thumbnails are exposed from `/thumbnails/*`.
+- Extracted comic pages are exposed from `/extracted/*`.
 
 Authorization: send `Authorization: Bearer <token>` for protected routes.
 
@@ -47,6 +57,8 @@ Authorization: send `Authorization: Bearer <token>` for protected routes.
 - Passwords are hashed with Node's built-in PBKDF2 before being stored in `data/users.json`.
 - Seed script creates a `demo` user with password `password123` and a placeholder content row.
 - Replace `scripts/lint-placeholder.js` with ESLint/TypeScript linting when expanding the project.
+- Videos are automatically prepared for iOS playback: supported MP4/MOV/M4V files stream directly and other formats can be transcoded on demand (requires `ffmpeg` on the host). Sidecar subtitles (`.srt`/`.smi`) are surfaced alongside video items when present.
+- Comic archives (CBZ/ZIP) get dedicated thumbnails and are extracted into a separate cache directory that is periodically cleaned up (requires the `unzip` binary on the host). Thumbnails and extracted files live in isolated folders with configurable TTL-based cleanup.
 
 ## Keyboard navigation (comics & webtoons)
 
