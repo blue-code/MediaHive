@@ -20,6 +20,7 @@ Copy `.env.example` to `.env` and adjust as needed:
 
 ```
 PORT=4000
+HOST=0.0.0.0
 JWT_SECRET=your-secret
 DATA_DIR=./data
 STORAGE_DIR=./storage
