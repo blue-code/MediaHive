@@ -360,6 +360,36 @@ select:focus,
   background: #05070f;
 }
 
+.extracted-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.breadcrumbs .button {
+  padding: 8px 12px;
+}
+
+.extracted-media {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.viewer-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
