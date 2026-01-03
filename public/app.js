@@ -1,5 +1,6 @@
 const API_BASE = "/api";
 const storage = window.localStorage;
+const LIBRARY_STORAGE_KEY = "mediahiveLibraryId";
 
 const elements = {
   authPill: document.getElementById("auth-pill"),
@@ -16,6 +17,8 @@ const elements = {
   lastUpdated: document.getElementById("last-updated"),
   libraryPath: document.getElementById("library-path"),
   libraryList: document.getElementById("library-list"),
+  librarySelect: document.getElementById("library-select"),
+  libraryInfo: document.getElementById("library-info"),
   browseButton: document.getElementById("browse"),
   dropzone: document.getElementById("dropzone"),
   fileInput: document.getElementById("file-input"),
@@ -110,6 +113,48 @@ function contentAccent(type = "") {
   if (type.includes("archive")) return "var(--accent-3)";
   if (type.includes("video")) return "var(--accent)";
   return "#fff";
+}
+
+function selectedLibraryId() {
+  return (
+    (elements.librarySelect && elements.librarySelect.value) ||
+    storage.getItem(LIBRARY_STORAGE_KEY) ||
+    ""
+  );
+}
+
+function setLibraryOptions(roots = [], activeId = "") {
+  if (!elements.librarySelect) return;
+  const fallbackId = storage.getItem(LIBRARY_STORAGE_KEY) || "";
+  const defaultId = activeId || elements.librarySelect.value || fallbackId || roots[0]?.id || "";
+
+  elements.librarySelect.innerHTML = "";
+  roots.forEach((root, index) => {
+    const option = document.createElement("option");
+    option.value = root.id;
+    option.textContent = root.name;
+    if (root.id === defaultId || (!defaultId && index === 0)) {
+      option.selected = true;
+    }
+    elements.librarySelect.append(option);
+  });
+
+  const selected = elements.librarySelect.value || defaultId;
+  if (selected) {
+    storage.setItem(LIBRARY_STORAGE_KEY, selected);
+  } else {
+    storage.removeItem(LIBRARY_STORAGE_KEY);
+  }
+}
+
+function renderLibraryInfo(libraryRoot, currentPath) {
+  if (!elements.libraryInfo) return;
+  if (!libraryRoot) {
+    elements.libraryInfo.textContent = "라이브러리가 설정되지 않았습니다.";
+    return;
+  }
+  const label = currentPath ? currentPath || "." : ".";
+  elements.libraryInfo.textContent = `${libraryRoot.name} (${libraryRoot.path}) · 현재 경로: ${label}`;
 }
 
 function createCard(item) {
@@ -258,10 +303,21 @@ async function handleContentAction(event) {
 
 async function browseLibrary() {
   const path = elements.libraryPath.value.trim();
+  const library = selectedLibraryId();
+  const params = new URLSearchParams();
+  if (path) params.set("path", path);
+  if (library) params.set("library", library);
   try {
-    const data = await api(`/library/browse${path ? `?path=${encodeURIComponent(path)}` : ""}`);
+    const query = params.toString();
+    const data = await api(`/library/browse${query ? `?${query}` : ""}`);
+    setLibraryOptions(data.libraryRoots || [], data.libraryRoot?.id);
+    renderLibraryInfo(data.libraryRoot, data.currentPath);
     elements.libraryList.innerHTML = "";
-    data.items.forEach((item) => {
+    const items = data.items || [];
+    if (!items.length) {
+      elements.libraryList.innerHTML = "<p class='muted'>항목이 없습니다.</p>";
+    }
+    items.forEach((item) => {
       const div = document.createElement("div");
       div.className = "library-item";
       div.innerHTML = `
@@ -320,6 +376,17 @@ function init() {
   elements.browseButton.addEventListener("click", browseLibrary);
   enableDropzone();
   wireScrollButtons();
+  if (elements.librarySelect) {
+    elements.librarySelect.addEventListener("change", () => {
+      const selected = elements.librarySelect.value;
+      if (selected) {
+        storage.setItem(LIBRARY_STORAGE_KEY, selected);
+      } else {
+        storage.removeItem(LIBRARY_STORAGE_KEY);
+      }
+    });
+  }
+  browseLibrary();
 }
 
 window.addEventListener("DOMContentLoaded", init);

@@ -144,10 +144,12 @@
             <p class="muted">설정된 라이브러리 폴더를 탐색합니다. 비디오 스트리밍은 HTTP Range를 지원합니다.</p>
           </div>
           <div class="row gap">
+            <select id="library-select" class="input"></select>
             <input id="library-path" class="input" placeholder="상대 경로 (선택)" />
             <button class="button ghost" id="browse">둘러보기</button>
           </div>
         </div>
+        <p class="muted" id="library-info"></p>
         <div class="library-list" id="library-list"></div>
       </section>
     </main>
