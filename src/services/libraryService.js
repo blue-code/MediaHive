@@ -154,10 +154,13 @@ function parseRange(rangeHeader, fileSize) {
   return { start, end: Math.min(end, fileSize - 1) };
 }
 
-function listExtractedImages(baseDir) {
+function listExtractedImages(baseDir, options = {}) {
+  const { allowNestedArchives = false } = options;
   if (!fs.existsSync(baseDir)) return [];
   const files = [];
-  extractNestedArchives(baseDir);
+  if (allowNestedArchives) {
+    extractNestedArchives(baseDir);
+  }
 
   function walk(target) {
     const entries = fs.readdirSync(target, { withFileTypes: true });
@@ -202,6 +205,204 @@ function extractNestedArchives(baseDir) {
   }
 }
 
+function sanitizeSubpath(subpath = "") {
+  if (!subpath) return "";
+  const normalized = path.normalize(subpath).replace(/^[\\/]+/, "");
+  if (normalized === "." || normalized === path.sep) return "";
+  if (normalized.startsWith("..") || path.isAbsolute(normalized)) {
+    throw new Error("Invalid subpath");
+  }
+  return normalized;
+}
+
+function findFirstImage(targetDir) {
+  try {
+    const entries = fs.readdirSync(targetDir, { withFileTypes: true });
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))) {
+      const entryPath = path.join(targetDir, entry.name);
+      if (entry.isDirectory()) {
+        const nested = findFirstImage(entryPath);
+        if (nested) return nested;
+      } else {
+        const ext = path.extname(entry.name).toLowerCase();
+        if (IMAGE_EXTS.has(ext)) {
+          return entryPath;
+        }
+      }
+    }
+  } catch (_err) {
+    // ignore directories we can't read
+  }
+  return null;
+}
+
+function describeExtractedEntry(entryPath, dirent, extractionRoot, relativeRootPath, libraryId = "extracted") {
+  const stats = fs.statSync(entryPath);
+  const relativePath = path.relative(extractionRoot, entryPath);
+  const mediaKind = detectMediaKind(entryPath, dirent);
+  const base = {
+    name: dirent.name,
+    path: relativePath,
+    type: dirent.isDirectory() ? "directory" : "file",
+    size: stats.size,
+    modifiedAt: stats.mtime.toISOString(),
+    mediaKind,
+    source: "extracted",
+  };
+
+  if (dirent.isDirectory()) {
+    const firstImage = findFirstImage(entryPath);
+    const thumbnail = firstImage
+      ? `/extracted/${path.join(relativeRootPath, path.relative(extractionRoot, firstImage))}`
+      : null;
+    return { ...base, thumbnail };
+  }
+
+  if (mediaKind === "video") {
+    const thumbPath = ensureVideoThumbnail(
+      entryPath,
+      path.relative(archiveExtractDir, entryPath),
+      libraryId || "extracted",
+    );
+    return {
+      ...base,
+      thumbnail: `/thumbnails/${path.basename(thumbPath)}`,
+      iosOptimized: isIosFriendlyVideo(entryPath),
+      supportsAutoTranscode: false,
+      streamPath: `/extracted/${path.join(relativeRootPath, relativePath)}`,
+    };
+  }
+
+  if (mediaKind === "image") {
+    const streamPath = `/extracted/${path.join(relativeRootPath, relativePath)}`;
+    return { ...base, thumbnail: streamPath, streamPath };
+  }
+
+  if (mediaKind === "archive") {
+    const fallbackThumb = ensureArchiveThumbnail(
+      path.relative(archiveExtractDir, entryPath),
+      libraryId || "extracted",
+    );
+    return {
+      ...base,
+      thumbnail: `/thumbnails/${path.basename(fallbackThumb)}`,
+    };
+  }
+
+  return base;
+}
+
+function buildExtractedListing(extractionRoot, relativeRootPath, subpath = "", context = {}) {
+  const safeSubpath = sanitizeSubpath(subpath);
+  const targetDir = path.resolve(extractionRoot, safeSubpath || ".");
+  const relative = path.relative(extractionRoot, targetDir);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("Invalid subpath");
+  }
+
+  if (!fs.existsSync(targetDir) || !fs.statSync(targetDir).isDirectory()) {
+    throw new Error("Extracted content not found");
+  }
+
+  const items = fs
+    .readdirSync(targetDir, { withFileTypes: true })
+    .map((dirent) =>
+      describeExtractedEntry(
+        path.join(targetDir, dirent.name),
+        dirent,
+        extractionRoot,
+        relativeRootPath,
+        context.libraryId,
+      ),
+    )
+    .filter((entry) => ALLOWED_MEDIA_KINDS.has(entry.mediaKind));
+
+  return {
+    ...context,
+    extractedRoot: relativeRootPath,
+    currentPath: relative || "",
+    breadcrumbs: (relative || "").split(path.sep).filter(Boolean),
+    items,
+  };
+}
+
+function browseArchiveContents({ archivePath, libraryId, scope = "library", subpath = "", root }) {
+  if (!archivePath) {
+    throw new Error("path is required");
+  }
+
+  if (scope !== "library" && scope !== "extracted") {
+    throw new Error("Unsupported archive scope");
+  }
+
+  if (scope === "library") {
+    const fileInfo = getFileInfo(archivePath, libraryId);
+    if (fileInfo.error) {
+      throw new Error(fileInfo.error);
+    }
+    if (fileInfo.mediaKind !== "archive") {
+      throw new Error("Target is not an archive");
+    }
+
+    const extractedDir = ensureArchiveExtracted(
+      fileInfo.absolute,
+      fileInfo.relativePath,
+      fileInfo.library.id,
+    );
+    const relativeExtracted = path.relative(archiveExtractDir, extractedDir);
+    return buildExtractedListing(extractedDir, relativeExtracted, subpath, {
+      archivePath: fileInfo.relativePath,
+      archiveName: path.basename(fileInfo.relativePath),
+      scope: "library",
+      libraryId: fileInfo.library.id,
+      archiveSourceRoot: null,
+    });
+  }
+
+  const archiveSourceRoot = root ? path.resolve(archiveExtractDir, root) : null;
+  if (!archiveSourceRoot) {
+    throw new Error("root is required when browsing extracted archives");
+  }
+  const archiveRootRelative = path.relative(archiveExtractDir, archiveSourceRoot);
+  if (archiveRootRelative.startsWith("..") || path.isAbsolute(archiveRootRelative)) {
+    throw new Error("Invalid archive root");
+  }
+
+  const absoluteArchivePath = path.resolve(archiveSourceRoot, archivePath);
+  const relativeArchivePath = path.relative(archiveSourceRoot, absoluteArchivePath);
+  if (relativeArchivePath.startsWith("..") || path.isAbsolute(relativeArchivePath)) {
+    throw new Error("Invalid archive path");
+  }
+  if (!fs.existsSync(absoluteArchivePath)) {
+    throw new Error("Archive not found");
+  }
+  const stats = fs.statSync(absoluteArchivePath);
+  if (!stats.isFile()) {
+    throw new Error("Archive target is not a file");
+  }
+  const mediaKind = detectMediaKind(absoluteArchivePath, {
+    isDirectory: () => false,
+  });
+  if (mediaKind !== "archive") {
+    throw new Error("Target is not an archive");
+  }
+
+  const extractedDir = ensureArchiveExtracted(
+    absoluteArchivePath,
+    path.relative(archiveExtractDir, absoluteArchivePath),
+    libraryId || "extracted",
+  );
+  const relativeExtracted = path.relative(archiveExtractDir, extractedDir);
+
+  return buildExtractedListing(extractedDir, relativeExtracted, subpath, {
+    archivePath: relativeArchivePath,
+    archiveName: path.basename(archivePath),
+    scope: "extracted",
+    libraryId: libraryId || "extracted",
+    archiveSourceRoot: archiveRootRelative,
+  });
+}
+
 module.exports = {
   listDirectory,
   getFileInfo,
@@ -212,4 +413,5 @@ module.exports = {
   touchPath,
   listExtractedImages,
   buildArchivePages,
+  browseArchiveContents,
 };

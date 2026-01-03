@@ -12,6 +12,7 @@ const {
   ensureIosReadyVideo,
   isIosFriendlyVideo,
   touchPath,
+  browseArchiveContents,
 } = require("../services/libraryService");
 
 const IMAGE_MIME_MAP = {
@@ -199,6 +200,30 @@ router.get("/archive/pages", (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ message: err.message });
+  }
+});
+
+router.get("/archive/browse", (req, res) => {
+  const archivePath = req.query.path;
+  const libraryId = req.query.library;
+  const scope = req.query.scope || "library";
+  const subpath = req.query.subpath || "";
+  const root = req.query.root;
+  if (!archivePath) {
+    return res.status(400).json({ message: "path query parameter is required" });
+  }
+
+  try {
+    const listing = browseArchiveContents({
+      archivePath,
+      libraryId,
+      scope,
+      subpath,
+      root,
+    });
+    return res.json(listing);
+  } catch (err) {
+    return res.status(400).json({ message: err.message });
   }
 });
 

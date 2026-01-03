@@ -23,6 +23,8 @@ const elements = {
   viewerPath: document.getElementById("viewer-path"),
 };
 
+let currentArchiveContext = null;
+
 function toast(message, variant = "info") {
   const div = document.createElement("div");
   div.className = `toast ${variant === "error" ? "error" : ""}`;
@@ -159,32 +161,44 @@ function cardThumbnail(item) {
   return "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='300' fill='none' stroke='%23ffffff55'><rect x='90' y='40' width='220' height='220' rx='30' ry='30' stroke-width='12'/></svg>";
 }
 
-function renderLibraryItems(items = []) {
-  elements.libraryGrid.innerHTML = "";
+function buildMediaCard(item, onClick) {
+  const card = document.createElement("article");
+  card.className = "media-card";
+  card.dataset.path = item.path;
+  card.dataset.library = item.libraryId;
+  card.dataset.kind = item.mediaKind || item.type;
+
+  card.innerHTML = `
+    <img class="thumb" src="${cardThumbnail(item)}" alt="${item.name}" loading="lazy" />
+    <div class="media-meta">
+      <p class="media-title">${item.name}</p>
+      <span class="badge">${item.mediaKind || item.type}</span>
+    </div>
+  `;
+
+  if (onClick) {
+    card.addEventListener("click", () => onClick(item));
+  }
+  return card;
+}
+
+function renderMediaGrid(items = [], container, onClick, emptyMessage) {
+  if (!container) return;
+  container.innerHTML = "";
   const filtered = items.filter((item) => SUPPORTED_MEDIA_KINDS.has(item.mediaKind || item.type));
   if (!filtered.length) {
-    elements.libraryGrid.innerHTML = "<p class='muted'>표시할 항목이 없습니다.</p>";
+    container.innerHTML = `<p class='muted'>${emptyMessage || "표시할 항목이 없습니다."}</p>`;
     return;
   }
 
   filtered.forEach((item) => {
-    const card = document.createElement("article");
-    card.className = "media-card";
-    card.dataset.path = item.path;
-    card.dataset.library = item.libraryId;
-    card.dataset.kind = item.mediaKind || item.type;
-
-    card.innerHTML = `
-      <img class="thumb" src="${cardThumbnail(item)}" alt="${item.name}" loading="lazy" />
-      <div class="media-meta">
-        <p class="media-title">${item.name}</p>
-        <span class="badge">${item.mediaKind || item.type}</span>
-      </div>
-    `;
-
-    card.addEventListener("click", () => handleOpenItem(item));
-    elements.libraryGrid.append(card);
+    const card = buildMediaCard(item, onClick);
+    container.append(card);
   });
+}
+
+function renderLibraryItems(items = []) {
+  renderMediaGrid(items, elements.libraryGrid, (item) => handleOpenItem(item));
 }
 
 async function browseLibrary() {
@@ -216,34 +230,224 @@ function openViewer() {
 }
 
 function closeViewer() {
+  currentArchiveContext = null;
   elements.viewer.classList.add("hidden");
   elements.viewerContent.innerHTML = "";
 }
 
-async function handleArchive(item) {
-  try {
-    const params = new URLSearchParams();
-    params.set("path", item.path);
-    if (item.libraryId) params.set("library", item.libraryId);
-    const data = await api(`/library/archive/pages?${params.toString()}`);
-    elements.viewerKind.textContent = "압축 만화";
-    elements.viewerTitle.textContent = item.name;
-    elements.viewerPath.textContent = item.path;
+function joinExtractedPath(root, relative) {
+  return [root || "", relative || ""]
+    .filter(Boolean)
+    .join("/")
+    .replace(/\\/g, "/");
+}
 
-    const list = document.createElement("div");
-    list.className = "page-list";
-    data.pages.forEach((url) => {
-      const img = document.createElement("img");
-      img.src = url;
-      img.alt = item.name;
-      list.append(img);
+async function fetchArchiveListing({ scope = "library", archivePath, libraryId, subpath = "", root }) {
+  const params = new URLSearchParams();
+  if (scope === "extracted") {
+    params.set("scope", "extracted");
+  }
+  params.set("path", archivePath);
+  if (libraryId && scope === "library") {
+    params.set("library", libraryId);
+  }
+  if (root && scope === "extracted") {
+    params.set("root", root);
+  }
+  if (subpath) {
+    params.set("subpath", subpath);
+  }
+  return api(`/library/archive/browse?${params.toString()}`);
+}
+
+function renderArchiveBreadcrumbs(context) {
+  const trail = document.createElement("div");
+  trail.className = "breadcrumbs";
+  const rootButton = document.createElement("button");
+  rootButton.className = "button ghost";
+  rootButton.textContent = context.archiveName || "루트";
+  rootButton.addEventListener("click", () => {
+    loadArchivePath("", context);
+  });
+  trail.append(rootButton);
+
+  let running = "";
+  (context.breadcrumbs || []).forEach((segment) => {
+    running = running ? `${running}/${segment}` : segment;
+    const crumb = document.createElement("button");
+    crumb.className = "button ghost";
+    crumb.textContent = segment;
+    crumb.addEventListener("click", () => {
+      loadArchivePath(running, context);
     });
-    elements.viewerContent.innerHTML = "";
-    elements.viewerContent.append(list);
-    openViewer();
+    trail.append(crumb);
+  });
+
+  return trail;
+}
+
+function renderArchiveBrowser(context) {
+  currentArchiveContext = context;
+  elements.viewerKind.textContent = "압축 탐색";
+  elements.viewerTitle.textContent = context.archiveName || "압축 파일";
+  const pathLabel = context.currentPath
+    ? `${context.archivePath || ""} / ${context.currentPath}`
+    : context.archivePath || "";
+  elements.viewerPath.textContent = pathLabel;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "extracted-browser";
+  wrapper.append(renderArchiveBreadcrumbs(context));
+
+  const grid = document.createElement("div");
+  grid.className = "media-grid";
+  renderMediaGrid(
+    context.items || [],
+    grid,
+    (item) => handleOpenExtractedItem(item, context),
+    "압축을 풀었지만 표시할 항목이 없습니다.",
+  );
+  wrapper.append(grid);
+
+  elements.viewerContent.innerHTML = "";
+  elements.viewerContent.append(wrapper);
+  openViewer();
+}
+
+async function loadArchivePath(subpath = "", context = currentArchiveContext) {
+  if (!context) return;
+  try {
+    const data = await fetchArchiveListing({
+      scope: context.scope || "library",
+      archivePath: context.archivePath,
+      libraryId: context.libraryId,
+      subpath,
+      root: context.scope === "extracted" ? context.archiveSourceRoot : undefined,
+    });
+    renderArchiveBrowser(data);
   } catch (err) {
     toast(err.message, "error");
   }
+}
+
+async function handleArchive(item) {
+  try {
+    const data = await fetchArchiveListing({
+      scope: "library",
+      archivePath: item.path,
+      libraryId: item.libraryId,
+    });
+    renderArchiveBrowser(data);
+  } catch (err) {
+    toast(err.message, "error");
+  }
+}
+
+function renderExtractedMedia(item, kind = "image") {
+  elements.viewerKind.textContent = kind === "video" ? "비디오" : "이미지";
+  elements.viewerTitle.textContent = item.name;
+  elements.viewerPath.textContent = item.path || "";
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "extracted-media";
+
+  const actions = document.createElement("div");
+  actions.className = "viewer-actions";
+  const backButton = document.createElement("button");
+  backButton.className = "button ghost";
+  backButton.textContent = "목록으로";
+  backButton.addEventListener("click", () => {
+    if (currentArchiveContext) {
+      renderArchiveBrowser(currentArchiveContext);
+    } else {
+      closeViewer();
+    }
+  });
+  actions.append(backButton);
+
+  if (kind === "video") {
+    const video = document.createElement("video");
+    video.controls = true;
+    video.playsInline = true;
+    video.autoplay = true;
+    video.src =
+      item.streamPath ||
+      (currentArchiveContext
+        ? `/extracted/${joinExtractedPath(currentArchiveContext.extractedRoot, item.path)}`
+        : "");
+    video.addEventListener("canplay", () => {
+      if (video.paused) {
+        video.play().catch(() => {});
+      }
+    });
+    wrapper.append(actions, video);
+  } else {
+    const img = document.createElement("img");
+    img.src =
+      item.streamPath ||
+      (currentArchiveContext
+        ? `/extracted/${joinExtractedPath(currentArchiveContext.extractedRoot, item.path)}`
+        : "");
+    img.alt = item.name;
+    img.className = "viewer-image";
+    wrapper.append(actions, img);
+  }
+
+  elements.viewerContent.innerHTML = "";
+  elements.viewerContent.append(wrapper);
+  openViewer();
+}
+
+function renderExtractedFile(item) {
+  const href =
+    item.streamPath ||
+    (currentArchiveContext
+      ? `/extracted/${joinExtractedPath(currentArchiveContext.extractedRoot, item.path)}`
+      : "");
+  if (href) {
+    window.open(href, "_blank", "noopener");
+  } else {
+    toast("파일을 열 수 없습니다.", "error");
+  }
+}
+
+async function handleOpenExtractedItem(item, context = currentArchiveContext) {
+  const kind = item.mediaKind || item.type;
+  if (!context) {
+    toast("압축 탐색 정보를 찾을 수 없습니다.", "error");
+    return;
+  }
+
+  if (kind === "directory") {
+    await loadArchivePath(item.path, context);
+    return;
+  }
+
+  if (kind === "archive") {
+    try {
+      const nested = await fetchArchiveListing({
+        scope: "extracted",
+        archivePath: item.path,
+        root: context.extractedRoot,
+      });
+      renderArchiveBrowser(nested);
+    } catch (err) {
+      toast(err.message, "error");
+    }
+    return;
+  }
+
+  if (kind === "image") {
+    renderExtractedMedia(item, "image");
+    return;
+  }
+
+  if (kind === "video") {
+    renderExtractedMedia(item, "video");
+    return;
+  }
+
+  renderExtractedFile(item);
 }
 
 function buildSubtitleTracks(videoEl, subtitles = [], libraryId) {
@@ -261,6 +465,7 @@ function buildSubtitleTracks(videoEl, subtitles = [], libraryId) {
 }
 
 function handleVideo(item) {
+  currentArchiveContext = null;
   const params = new URLSearchParams();
   params.set("path", item.path);
   if (item.libraryId) params.set("library", item.libraryId);
@@ -289,11 +494,13 @@ function handleVideo(item) {
 }
 
 function handleDirectory(item) {
+  currentArchiveContext = null;
   elements.libraryPath.value = item.path;
   browseLibrary();
 }
 
 function handleImage(item) {
+  currentArchiveContext = null;
   const params = new URLSearchParams();
   params.set("path", item.path);
   if (item.libraryId) params.set("library", item.libraryId);
@@ -313,6 +520,7 @@ function handleImage(item) {
 }
 
 function handleFile(item) {
+  currentArchiveContext = null;
   const params = new URLSearchParams();
   params.set("path", item.path);
   if (item.libraryId) params.set("library", item.libraryId);
@@ -326,6 +534,9 @@ function handleFile(item) {
 }
 
 function handleOpenItem(item) {
+  if (item.source === "extracted") {
+    return handleOpenExtractedItem(item);
+  }
   const kind = item.mediaKind || item.type;
   if (kind === "directory") return handleDirectory(item);
   if (kind === "video") return handleVideo(item);
