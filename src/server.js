@@ -6,6 +6,7 @@ const { port, storageDir } = require("./config");
 const { ensureDir } = require("./utils/fileStore");
 const authRoutes = require("./routes/auth");
 const contentRoutes = require("./routes/content");
+const libraryRoutes = require("./routes/library");
 
 function bootstrap() {
   ensureDir(storageDir);
@@ -23,6 +24,7 @@ function bootstrap() {
   app.use("/media", express.static(path.join(storageDir, "media")));
   app.use("/api/auth", authRoutes);
   app.use("/api/content", contentRoutes);
+  app.use("/api/library", libraryRoutes);
 
   app.use((req, res) => {
     res.status(404).json({ message: `Route ${req.path} not found` });

@@ -23,6 +23,7 @@ PORT=4000
 JWT_SECRET=your-secret
 DATA_DIR=./data
 STORAGE_DIR=./storage
+LIBRARY_DIR=./library   # folder containing epubs, videos, zip comics, etc.
 ```
 
 ## API overview
@@ -34,6 +35,8 @@ STORAGE_DIR=./storage
 - `POST /api/content` — create metadata entry (protected). Body: `{ "title": "...", "type": "video|image|epub|...", "description": "..." }`
 - `POST /api/content/upload` — upload a file to local disk (protected). Form-data: `file` + optional `title`, `type`, `description`. Returns the created content record with file path.
 - `DELETE /api/content/:id` — delete content and its file (protected).
+- `GET /api/library/browse?path=` — browse the configured library directory (mix of videos, epubs, zip comics, etc.). `path` is relative to `LIBRARY_DIR` (omit for root).
+- `GET /api/library/stream?path=` — stream any file inside the library directory (supports HTTP Range for videos). Supply `path` relative to `LIBRARY_DIR`.
 
 Authorization: send `Authorization: Bearer <token>` for protected routes.
 

@@ -8,4 +8,5 @@ module.exports = {
   jwtSecret: process.env.JWT_SECRET || "local-dev-secret",
   dataDir: process.env.DATA_DIR || path.join(ROOT_DIR, "data"),
   storageDir: process.env.STORAGE_DIR || path.join(ROOT_DIR, "storage"),
+  libraryDir: process.env.LIBRARY_DIR || path.join(ROOT_DIR, "library"),
 };
