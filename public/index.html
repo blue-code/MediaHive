@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MediaHive — Neon Control Deck</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="plasma"></div>
+    <div class="grid-overlay"></div>
+
+    <header class="hero">
+      <div class="eyebrow">MEDIAHIVE</div>
+      <h1>
+        Your media vault, <span class="accent">sleek</span>,
+        <span class="accent">functional</span>, and absolutely
+        <span class="accent">sexy</span>.
+      </h1>
+      <p class="lede">
+        Upload. Browse. Command every pixel with neon confidence. This control deck wraps the API in
+        a shimmering, tactile experience built for speed.
+      </p>
+      <div class="hero-actions">
+        <button class="button primary" data-scroll="content">View Library</button>
+        <button class="button ghost" data-scroll="upload">Drop New Media</button>
+        <div class="pill" id="auth-pill">Guest mode · log in for full power</div>
+      </div>
+      <div class="stat-bar">
+        <div class="stat">
+          <span class="label">Content</span>
+          <span class="value" id="stat-content">—</span>
+        </div>
+        <div class="stat">
+          <span class="label">Linked files</span>
+          <span class="value" id="stat-linked">—</span>
+        </div>
+        <div class="stat">
+          <span class="label">Navigation ready</span>
+          <span class="value" id="stat-ready">—</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel" id="auth">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">ACCESS</p>
+            <h2>Log in or create a drop account</h2>
+            <p class="muted">Tokens live locally. Stay signed in while you sculpt your library.</p>
+          </div>
+          <div class="chip chip-iris" id="token-status">No token</div>
+        </div>
+        <div class="forms">
+          <form id="login-form" class="card glass">
+            <div class="card-header">
+              <h3>Login</h3>
+              <p class="muted">Use your MediaHive credentials to unlock uploads.</p>
+            </div>
+            <label>Username<input name="username" placeholder="demo" required /></label>
+            <label>Password<input name="password" type="password" placeholder="••••••••" required /></label>
+            <button class="button primary" type="submit">Log in</button>
+          </form>
+          <form id="register-form" class="card glass">
+            <div class="card-header">
+              <h3>Register</h3>
+              <p class="muted">Create a fresh account for this deck.</p>
+            </div>
+            <label>Username<input name="username" placeholder="new-handle" required /></label>
+            <label>Password<input name="password" type="password" placeholder="choose something strong" required /></label>
+            <button class="button ghost" type="submit">Create account</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="panel" id="upload">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">INGEST</p>
+            <h2>Drop media, set its vibe</h2>
+            <p class="muted">Drag in a file or craft a metadata-only entry. Reading modes are first-class.</p>
+          </div>
+          <div class="chip chip-flare">Auth required for uploads</div>
+        </div>
+        <form id="upload-form" class="upload-card glass" enctype="multipart/form-data">
+          <div class="dropzone" id="dropzone">
+            <div>
+              <p class="eyebrow">DRAG & DROP</p>
+              <h3>Slide a file anywhere here</h3>
+              <p class="muted">Or tap to browse. We’ll timestamp the filename for you.</p>
+            </div>
+            <input id="file-input" name="file" type="file" />
+          </div>
+          <div class="grid">
+            <label>Title<input name="title" placeholder="Cyberpunk short" /></label>
+            <label>Type<select name="type">
+              <option value="video">video</option>
+              <option value="image">image</option>
+              <option value="webtoon">webtoon</option>
+              <option value="archive-comic">archive-comic</option>
+              <option value="archive-webtoon">archive-webtoon</option>
+              <option value="text">text</option>
+              <option value="file">file</option>
+            </select></label>
+            <label>Reading mode<select name="readingMode">
+              <option value="">auto</option>
+              <option value="paged">paged</option>
+              <option value="webtoon">webtoon</option>
+              <option value="archive-comic">archive-comic</option>
+              <option value="archive-webtoon">archive-webtoon</option>
+            </select></label>
+            <label>Description<textarea name="description" rows="2" placeholder="Add a mood or synopsis"></textarea></label>
+          </div>
+          <div class="row end">
+            <button class="button primary" type="submit">Upload & Create</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel" id="content">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">CATALOG</p>
+            <h2>Every item at a glance</h2>
+            <p class="muted">Live content fetched from the API, with quick actions to open, tune modes, or purge.</p>
+          </div>
+          <div class="row gap">
+            <button class="button ghost" id="refresh">Refresh</button>
+            <div class="chip" id="last-updated">—</div>
+          </div>
+        </div>
+        <div class="content-grid" id="content-grid"></div>
+      </section>
+
+      <section class="panel" id="library">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">FILE SYSTEM</p>
+            <h2>Library explorer</h2>
+            <p class="muted">Browse the configured library folder. Streams respect HTTP range for videos.</p>
+          </div>
+          <div class="row gap">
+            <input id="library-path" class="input" placeholder="relative path (optional)" />
+            <button class="button ghost" id="browse">Browse</button>
+          </div>
+        </div>
+        <div class="library-list" id="library-list"></div>
+      </section>
+    </main>
+
+    <div class="toaster" id="toaster"></div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

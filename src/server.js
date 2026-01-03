@@ -16,6 +16,7 @@ function bootstrap() {
   ensureMediaDirs();
 
   const app = express();
+  const publicDir = path.join(__dirname, "..", "public");
 
   app.use(cors());
   app.use(morgan("dev"));
@@ -27,9 +28,14 @@ function bootstrap() {
   app.use("/media", express.static(path.join(storageDir, "media")));
   app.use("/thumbnails", express.static(path.join(storageDir, "thumbnails")));
   app.use("/extracted", express.static(path.join(storageDir, "extracted")));
+  app.use(express.static(publicDir));
   app.use("/api/auth", authRoutes);
   app.use("/api/content", contentRoutes);
   app.use("/api/library", libraryRoutes);
+
+  app.get("/", (_req, res) => {
+    res.sendFile(path.join(publicDir, "index.html"));
+  });
 
   app.use((req, res) => {
     res.status(404).json({ message: `Route ${req.path} not found` });

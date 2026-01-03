@@ -1,0 +1,325 @@
+const API_BASE = "/api";
+const storage = window.localStorage;
+
+const elements = {
+  authPill: document.getElementById("auth-pill"),
+  tokenStatus: document.getElementById("token-status"),
+  statContent: document.getElementById("stat-content"),
+  statLinked: document.getElementById("stat-linked"),
+  statReady: document.getElementById("stat-ready"),
+  contentGrid: document.getElementById("content-grid"),
+  refresh: document.getElementById("refresh"),
+  uploadForm: document.getElementById("upload-form"),
+  loginForm: document.getElementById("login-form"),
+  registerForm: document.getElementById("register-form"),
+  toaster: document.getElementById("toaster"),
+  lastUpdated: document.getElementById("last-updated"),
+  libraryPath: document.getElementById("library-path"),
+  libraryList: document.getElementById("library-list"),
+  browseButton: document.getElementById("browse"),
+  dropzone: document.getElementById("dropzone"),
+  fileInput: document.getElementById("file-input"),
+};
+
+function toast(message, variant = "info") {
+  const div = document.createElement("div");
+  div.className = `toast ${variant === "error" ? "error" : ""}`;
+  div.textContent = message;
+  elements.toaster.append(div);
+  setTimeout(() => div.remove(), 4200);
+}
+
+function getToken() {
+  return storage.getItem("mediahiveToken") || "";
+}
+
+function setToken(token, user) {
+  if (token) {
+    storage.setItem("mediahiveToken", token);
+    storage.setItem("mediahiveUser", JSON.stringify(user));
+  } else {
+    storage.removeItem("mediahiveToken");
+    storage.removeItem("mediahiveUser");
+  }
+  paintAuthState();
+}
+
+function paintAuthState() {
+  const token = getToken();
+  const user = storage.getItem("mediahiveUser");
+  const parsedUser = user ? JSON.parse(user) : null;
+  if (token && parsedUser) {
+    elements.authPill.textContent = `Signed in as ${parsedUser.username}`;
+    elements.tokenStatus.textContent = "Token active";
+    elements.tokenStatus.classList.add("chip-flare");
+  } else {
+    elements.authPill.textContent = "Guest mode · log in for full power";
+    elements.tokenStatus.textContent = "No token";
+    elements.tokenStatus.classList.remove("chip-flare");
+  }
+}
+
+async function api(path, options = {}) {
+  const token = getToken();
+  const headers = { ...(options.headers || {}), Accept: "application/json" };
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = headers["Content-Type"] || "application/json";
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    let message = `Request failed (${response.status})`;
+    try {
+      const data = await response.json();
+      message = data.message || message;
+    } catch (err) {
+      // ignore parse error
+    }
+    throw new Error(message);
+  }
+
+  const contentType = response.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
+    return response.json();
+  }
+  return response.text();
+}
+
+function updateStats(items = []) {
+  const linked = items.filter((i) => i.url).length;
+  const ready = items.filter((i) => i.navigation && i.navigation.readingMode).length;
+  elements.statContent.textContent = items.length;
+  elements.statLinked.textContent = linked;
+  elements.statReady.textContent = ready;
+}
+
+function readingModeLabel(item) {
+  if (!item.navigation.readingMode) return "Mode needed";
+  return item.navigation.readingMode.replace("archive-", "archive → ");
+}
+
+function contentAccent(type = "") {
+  if (type.includes("webtoon")) return "var(--accent-2)";
+  if (type.includes("archive")) return "var(--accent-3)";
+  if (type.includes("video")) return "var(--accent)";
+  return "#fff";
+}
+
+function createCard(item) {
+  const card = document.createElement("article");
+  card.className = "content-card";
+  const accent = contentAccent(item.type.toLowerCase());
+
+  card.innerHTML = `
+    <div class="meta">
+      <div class="title-row">
+        <div>
+          <div class="badge" style="border-color:${accent};color:${accent}">${item.type}</div>
+          <h3>${item.title}</h3>
+        </div>
+        <div class="chip" style="color:${accent};border-color:${accent};">${readingModeLabel(item)}</div>
+      </div>
+      <p class="description">${item.description || "No description yet"}</p>
+      ${item.url ? `<a class="button ghost" href="${item.url}" target="_blank">Open file</a>` : ""}
+      <div class="card-actions">
+        <select class="mode-select" data-id="${item.id}">
+          <option value="">auto</option>
+          <option value="paged">paged</option>
+          <option value="webtoon">webtoon</option>
+          <option value="archive-comic">archive-comic</option>
+          <option value="archive-webtoon">archive-webtoon</option>
+        </select>
+        <button class="button ghost" data-action="apply" data-id="${item.id}">Set mode</button>
+        <button class="button" data-action="delete" data-id="${item.id}">Delete</button>
+      </div>
+    </div>`;
+
+  const modeSelect = card.querySelector(".mode-select");
+  if (item.navigation.readingMode) {
+    modeSelect.value = item.navigation.readingMode;
+  }
+  modeSelect.dataset.type = item.type;
+  return card;
+}
+
+async function loadContent() {
+  elements.contentGrid.innerHTML = "<p class='muted'>Loading catalog…</p>";
+  try {
+    const data = await api("/content");
+    const items = data.items || [];
+    elements.contentGrid.innerHTML = "";
+    items.forEach((item) => elements.contentGrid.append(createCard(item)));
+    updateStats(items);
+    elements.lastUpdated.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  } catch (err) {
+    elements.contentGrid.innerHTML = `<p class='muted'>${err.message}</p>`;
+  }
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+  const formData = new FormData(event.target);
+  const payload = Object.fromEntries(formData.entries());
+  try {
+    const data = await api("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    setToken(data.token, data.user);
+    toast(`Welcome back, ${data.user.username}`);
+  } catch (err) {
+    toast(err.message, "error");
+  }
+}
+
+async function handleRegister(event) {
+  event.preventDefault();
+  const formData = new FormData(event.target);
+  const payload = Object.fromEntries(formData.entries());
+  try {
+    const data = await api("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    setToken(data.token, data.user);
+    toast(`Account created for ${data.user.username}`);
+  } catch (err) {
+    toast(err.message, "error");
+  }
+}
+
+async function handleUpload(event) {
+  event.preventDefault();
+  const token = getToken();
+  if (!token) {
+    toast("Login first to upload", "error");
+    return;
+  }
+
+  const formData = new FormData(elements.uploadForm);
+  try {
+    await api("/content/upload", {
+      method: "POST",
+      body: formData,
+    });
+    toast("Upload complete. Catalog refreshed.");
+    elements.uploadForm.reset();
+    await loadContent();
+  } catch (err) {
+    toast(err.message, "error");
+  }
+}
+
+async function handleContentAction(event) {
+  const target = event.target.closest("button");
+  if (!target) return;
+  const id = target.dataset.id;
+  if (!id) return;
+  const action = target.dataset.action;
+
+  if (action === "delete") {
+    if (!confirm("Delete this item?")) return;
+    try {
+      await api(`/content/${id}`, { method: "DELETE" });
+      toast("Item deleted");
+      await loadContent();
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  }
+
+  if (action === "apply") {
+    const card = target.closest(".content-card");
+    const select = card.querySelector(".mode-select");
+    const mode = select.value;
+    if (!mode) {
+      toast("Pick a reading mode first", "error");
+      return;
+    }
+    try {
+      await api(`/content/${id}/navigation`, {
+        method: "PATCH",
+        body: JSON.stringify({ readingMode: mode }),
+      });
+      toast("Reading mode updated");
+      await loadContent();
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  }
+}
+
+async function browseLibrary() {
+  const path = elements.libraryPath.value.trim();
+  try {
+    const data = await api(`/library/browse${path ? `?path=${encodeURIComponent(path)}` : ""}`);
+    elements.libraryList.innerHTML = "";
+    data.items.forEach((item) => {
+      const div = document.createElement("div");
+      div.className = "library-item";
+      div.innerHTML = `
+        <div class="path">${item.name}</div>
+        <div class="muted">${item.type} · ${item.size}</div>
+      `;
+      elements.libraryList.append(div);
+    });
+    toast("Library updated");
+  } catch (err) {
+    elements.libraryList.innerHTML = `<p class='muted'>${err.message}</p>`;
+    toast(err.message, "error");
+  }
+}
+
+function enableDropzone() {
+  elements.dropzone.addEventListener("click", () => elements.fileInput.click());
+  ["dragenter", "dragover"].forEach((evt) =>
+    elements.dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      elements.dropzone.style.borderColor = "var(--accent)";
+    }),
+  );
+  ["dragleave", "drop"].forEach((evt) =>
+    elements.dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      elements.dropzone.style.borderColor = "rgba(255,255,255,0.2)";
+    }),
+  );
+  elements.dropzone.addEventListener("drop", (event) => {
+    event.preventDefault();
+    if (event.dataTransfer.files.length) {
+      elements.fileInput.files = event.dataTransfer.files;
+    }
+  });
+}
+
+function wireScrollButtons() {
+  document.querySelectorAll("[data-scroll]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.scroll;
+      const target = document.getElementById(id);
+      if (target) target.scrollIntoView({ behavior: "smooth" });
+    });
+  });
+}
+
+function init() {
+  paintAuthState();
+  loadContent();
+  elements.loginForm.addEventListener("submit", handleLogin);
+  elements.registerForm.addEventListener("submit", handleRegister);
+  elements.uploadForm.addEventListener("submit", handleUpload);
+  elements.refresh.addEventListener("click", loadContent);
+  elements.contentGrid.addEventListener("click", handleContentAction);
+  elements.browseButton.addEventListener("click", browseLibrary);
+  enableDropzone();
+  wireScrollButtons();
+}
+
+window.addEventListener("DOMContentLoaded", init);
