@@ -118,8 +118,61 @@ function ensureVideoThumbnail(absolutePath, relativePath, libraryId = "default")
   return targetPath;
 }
 
-function ensureArchiveThumbnail(relativePath, libraryId = "default") {
-  return ensureThumbnail("archive", relativePath, libraryId);
+function ensureArchiveThumbnail(absolutePath, relativePath, libraryId = "default") {
+  ensureMediaDirs();
+  const hashed = hashPath(relativePath, libraryId);
+  const targetPath = path.join(thumbnailDir, `${hashed}-archive.png`);
+
+  if (fs.existsSync(targetPath)) {
+    touchPath(targetPath);
+    return targetPath;
+  }
+
+  // Try to extract archive and find first image for thumbnail
+  const tempDir = getArchiveExtractionTarget(relativePath, libraryId);
+  try {
+    const extracted = tryExtractArchive(absolutePath, tempDir);
+    if (extracted.success) {
+      const firstImage = findFirstImageInDir(tempDir);
+      if (firstImage && hasFfmpeg()) {
+        // Generate thumbnail from first image using ffmpeg
+        const result = spawnSync("ffmpeg", [
+          "-y", "-i", firstImage, 
+          "-vframes", "1", 
+          "-vf", "scale=480:-1", 
+          targetPath
+        ], { stdio: "ignore" });
+        
+        if (result.status === 0 && fs.existsSync(targetPath)) {
+          return targetPath;
+        }
+      }
+    }
+  } catch (err) {
+    // fall through to placeholder
+  }
+
+  writePlaceholder("archive", targetPath);
+  return targetPath;
+}
+
+function findFirstImageInDir(dirPath) {
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const entry of entries.sort((a, b) => 
+      a.name.localeCompare(b.name, undefined, { numeric: true }))) {
+      const fullPath = path.join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        const nested = findFirstImageInDir(fullPath);
+        if (nested) return nested;
+      } else if (IMAGE_EXTS.has(path.extname(entry.name).toLowerCase())) {
+        return fullPath;
+      }
+    }
+  } catch (err) {
+    // ignore directories we can't read
+  }
+  return null;
 }
 
 function findSidecarSubtitles(absolutePath, libraryRoot) {
@@ -145,7 +198,12 @@ function ensureIosReadyVideo(
   }
 
   if (!hasFfmpeg()) {
-    return { error: "ffmpeg is required for on-the-fly iOS transcoding" };
+    return { 
+      error: "비디오 트랜스코딩을 위해 ffmpeg가 필요합니다. 설치 방법:\n" +
+             "- Ubuntu/Debian: sudo apt install ffmpeg\n" +
+             "- macOS: brew install ffmpeg\n" +
+             "- Windows: https://ffmpeg.org/download.html"
+    };
   }
 
   ensureMediaDirs();
@@ -211,7 +269,10 @@ function tryExtractArchive(archivePath, targetDir) {
   }
   return {
     success: false,
-    error: errors.join("; ") || "No available extractor succeeded",
+    error: "압축 해제 도구가 필요합니다. 설치 방법:\n" +
+           "- Ubuntu/Debian: sudo apt install unzip\n" +
+           "- macOS: brew install p7zip\n" +
+           "- Windows: 7-Zip 설치 (https://www.7-zip.org/)"
   };
 }
 
@@ -240,8 +301,11 @@ module.exports = {
   ensureVideoThumbnail,
   getArchiveExtractionTarget,
   findSidecarSubtitles,
+  findFirstImageInDir,
   hashPath,
   isIosFriendlyVideo,
   tryExtractArchive,
   touchPath,
+  writePlaceholder,
+  hasFfmpeg,
 };

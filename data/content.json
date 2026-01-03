@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "id": "cdb50d50-e7a2-41d7-8921-1a9496f074a8",
+    "title": "Welcome to MediaHive",
+    "type": "text",
+    "description": "Placeholder content entry stored on local disk.",
+    "filePath": "",
+    "url": "",
+    "createdAt": "2026-01-03T13:13:24.359Z"
+  }
+]

@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "id": "57cbde43-d67f-48d6-94d6-b47c71a3af53",
+    "username": "demo",
+    "passwordHash": "pbkdf2:120000:sha512:e0c30b7f121b2b1c87f6950a9052b340:81171eb67080c9811be79b4dc05b6a7730f1df8d2b3bc0a7536b3dba6e23fd2a65d4cb960447ecc692a4dba06dddf04f77dde534d6481ab27cb84caea2ad9c2a",
+    "createdAt": "2026-01-03T13:13:24.355Z"
+  }
+]

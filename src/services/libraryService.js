@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { archiveExtractDir, getLibraryRoot, libraryRoots } = require("../config");
+const { archiveExtractDir, getLibraryRoot, libraryRoots, thumbnailDir } = require("../config");
 const {
   detectMediaKind,
   ensureArchiveExtracted,
@@ -14,6 +14,10 @@ const {
   isIosFriendlyVideo,
   tryExtractArchive,
   touchPath,
+  writePlaceholder,
+  hasFfmpeg,
+  hashPath,
+  findFirstImageInDir,
 } = require("./mediaProcessingService");
 const { ensureDir } = require("../utils/fileStore");
 
@@ -21,6 +25,33 @@ const DEFAULT_CHUNK_SIZE = 1 * 1024 * 1024; // 1MB
 const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".bmp"]);
 const ALLOWED_MEDIA_KINDS = new Set(["directory", "video", "archive", "image"]);
 const ARCHIVE_EXTS = new Set([".zip", ".cbz", ".cbr"]);
+
+function ensureDirectoryThumbnail(firstImagePath, dirRelativePath, libraryId) {
+  const hashed = hashPath(dirRelativePath, libraryId);
+  const targetPath = path.join(thumbnailDir, `${hashed}-dir.png`);
+  
+  if (fs.existsSync(targetPath)) {
+    touchPath(targetPath);
+    return targetPath;
+  }
+  
+  if (hasFfmpeg()) {
+    const result = spawnSync("ffmpeg", [
+      "-y", "-i", firstImagePath,
+      "-vframes", "1",
+      "-vf", "scale=480:-1",
+      targetPath
+    ], { stdio: "ignore" });
+    
+    if (result.status === 0 && fs.existsSync(targetPath)) {
+      return targetPath;
+    }
+  }
+  
+  // fallback to placeholder
+  writePlaceholder("directory", targetPath);
+  return targetPath;
+}
 
 function buildArchivePages(entryPath, relativePath, root) {
   try {
@@ -73,6 +104,18 @@ function describeEntry(entryPath, dirent, root) {
     modifiedAt: stats.mtime.toISOString(),
   };
 
+  if (mediaKind === "directory") {
+    const firstImage = findFirstImageInDir(entryPath);
+    const thumbnail = firstImage 
+      ? `/thumbnails/${path.basename(ensureDirectoryThumbnail(firstImage, relativePath, root.id))}`
+      : null;
+    return {
+      ...base,
+      mediaKind,
+      thumbnail,
+    };
+  }
+
   if (mediaKind === "video") {
     const thumbnailPath = ensureVideoThumbnail(entryPath, relativePath, root.id);
     return {
@@ -87,7 +130,7 @@ function describeEntry(entryPath, dirent, root) {
 
   if (mediaKind === "archive") {
     const { thumbnail, pages, extractedPath } = buildArchivePages(entryPath, relativePath, root);
-    const fallbackThumb = ensureArchiveThumbnail(relativePath, root.id);
+    const fallbackThumb = ensureArchiveThumbnail(entryPath, relativePath, root.id);
     return {
       ...base,
       mediaKind,
@@ -215,27 +258,6 @@ function sanitizeSubpath(subpath = "") {
   return normalized;
 }
 
-function findFirstImage(targetDir) {
-  try {
-    const entries = fs.readdirSync(targetDir, { withFileTypes: true });
-    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))) {
-      const entryPath = path.join(targetDir, entry.name);
-      if (entry.isDirectory()) {
-        const nested = findFirstImage(entryPath);
-        if (nested) return nested;
-      } else {
-        const ext = path.extname(entry.name).toLowerCase();
-        if (IMAGE_EXTS.has(ext)) {
-          return entryPath;
-        }
-      }
-    }
-  } catch (_err) {
-    // ignore directories we can't read
-  }
-  return null;
-}
-
 function describeExtractedEntry(entryPath, dirent, extractionRoot, relativeRootPath, libraryId = "extracted") {
   const stats = fs.statSync(entryPath);
   const relativePath = path.relative(extractionRoot, entryPath);
@@ -251,7 +273,7 @@ function describeExtractedEntry(entryPath, dirent, extractionRoot, relativeRootP
   };
 
   if (dirent.isDirectory()) {
-    const firstImage = findFirstImage(entryPath);
+    const firstImage = findFirstImageInDir(entryPath);
     const thumbnail = firstImage
       ? `/extracted/${path.join(relativeRootPath, path.relative(extractionRoot, firstImage))}`
       : null;
@@ -279,13 +301,15 @@ function describeExtractedEntry(entryPath, dirent, extractionRoot, relativeRootP
   }
 
   if (mediaKind === "archive") {
-    const fallbackThumb = ensureArchiveThumbnail(
+    // Use real thumbnail from nested archive's first image
+    const nestedThumbPath = ensureArchiveThumbnail(
+      entryPath,
       path.relative(archiveExtractDir, entryPath),
       libraryId || "extracted",
     );
     return {
       ...base,
-      thumbnail: `/thumbnails/${path.basename(fallbackThumb)}`,
+      thumbnail: `/thumbnails/${path.basename(nestedThumbPath)}`,
     };
   }
 
