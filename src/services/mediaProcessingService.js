@@ -2,12 +2,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { execSync, spawnSync } = require("child_process");
-const {
-  libraryDir,
-  thumbnailDir,
-  archiveExtractDir,
-  transcodedDir,
-} = require("../config");
+const { thumbnailDir, archiveExtractDir, transcodedDir } = require("../config");
 const { ensureDir } = require("../utils/fileStore");
 
 const SUPPORTED_IOS_VIDEO_EXTS = new Set([".mp4", ".m4v", ".mov"]);
@@ -25,8 +20,8 @@ const IOS_MIME_MAP = {
   ".mov": "video/quicktime",
 };
 
-function hashPath(relativePath) {
-  return crypto.createHash("md5").update(relativePath).digest("hex");
+function hashPath(relativePath, libraryId = "default") {
+  return crypto.createHash("md5").update(`${libraryId}:${relativePath}`).digest("hex");
 }
 
 function ensureMediaDirs() {
@@ -78,9 +73,9 @@ function touchPath(targetPath) {
   }
 }
 
-function ensureThumbnail(kind, relativePath) {
+function ensureThumbnail(kind, relativePath, libraryId = "default") {
   ensureMediaDirs();
-  const hashed = hashPath(relativePath);
+  const hashed = hashPath(relativePath, libraryId);
   const targetPath = path.join(thumbnailDir, `${hashed}-${kind}.png`);
   if (!fs.existsSync(targetPath)) {
     writePlaceholder(kind, targetPath);
@@ -90,9 +85,9 @@ function ensureThumbnail(kind, relativePath) {
   return targetPath;
 }
 
-function ensureVideoThumbnail(absolutePath, relativePath) {
+function ensureVideoThumbnail(absolutePath, relativePath, libraryId = "default") {
   ensureMediaDirs();
-  const hashed = hashPath(relativePath);
+  const hashed = hashPath(relativePath, libraryId);
   const targetPath = path.join(thumbnailDir, `${hashed}-video.png`);
 
   if (fs.existsSync(targetPath)) {
@@ -115,11 +110,11 @@ function ensureVideoThumbnail(absolutePath, relativePath) {
   return targetPath;
 }
 
-function ensureArchiveThumbnail(relativePath) {
-  return ensureThumbnail("archive", relativePath);
+function ensureArchiveThumbnail(relativePath, libraryId = "default") {
+  return ensureThumbnail("archive", relativePath, libraryId);
 }
 
-function findSidecarSubtitles(absolutePath) {
+function findSidecarSubtitles(absolutePath, libraryRoot) {
   const parsed = path.parse(absolutePath);
   if (!fs.existsSync(parsed.dir)) return [];
   return fs
@@ -128,10 +123,15 @@ function findSidecarSubtitles(absolutePath) {
       const ext = path.extname(file).toLowerCase();
       return SUBTITLE_EXTS.has(ext) && path.parse(file).name === parsed.name;
     })
-    .map((file) => path.relative(libraryDir, path.join(parsed.dir, file)));
+    .map((file) => path.relative(libraryRoot.path, path.join(parsed.dir, file)));
 }
 
-function ensureIosReadyVideo(absolutePath, relativePath, forceTranscode = false) {
+function ensureIosReadyVideo(
+  absolutePath,
+  relativePath,
+  libraryId = "default",
+  forceTranscode = false,
+) {
   if (isIosFriendlyVideo(absolutePath) && !forceTranscode) {
     return { path: absolutePath, contentType: iosContentTypeFor(absolutePath) };
   }
@@ -141,7 +141,7 @@ function ensureIosReadyVideo(absolutePath, relativePath, forceTranscode = false)
   }
 
   ensureMediaDirs();
-  const output = path.join(transcodedDir, `${hashPath(relativePath)}.mp4`);
+  const output = path.join(transcodedDir, `${hashPath(relativePath, libraryId)}.mp4`);
   if (!fs.existsSync(output)) {
     const result = spawnSync(
       "ffmpeg",
@@ -175,13 +175,13 @@ function ensureIosReadyVideo(absolutePath, relativePath, forceTranscode = false)
   return { path: output, contentType: "video/mp4" };
 }
 
-function getArchiveExtractionTarget(relativePath) {
-  return path.join(archiveExtractDir, hashPath(relativePath));
+function getArchiveExtractionTarget(relativePath, libraryId = "default") {
+  return path.join(archiveExtractDir, hashPath(relativePath, libraryId));
 }
 
-function ensureArchiveExtracted(absolutePath, relativePath) {
+function ensureArchiveExtracted(absolutePath, relativePath, libraryId = "default") {
   ensureMediaDirs();
-  const targetDir = getArchiveExtractionTarget(relativePath);
+  const targetDir = getArchiveExtractionTarget(relativePath, libraryId);
   ensureDir(targetDir);
 
   const result = spawnSync("unzip", ["-qq", "-o", absolutePath, "-d", targetDir]);

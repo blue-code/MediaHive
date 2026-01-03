@@ -1,8 +1,10 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+
 const { archiveExtractDir, libraryDir } = require("../config");
 const authMiddleware = require("../middleware/auth");
+
 const {
   listDirectory,
   getFileInfo,
@@ -17,32 +19,36 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
+
 router.get("/browse", (req, res) => {
   const targetPath = req.query.path || "";
+  const libraryId = req.query.library;
   try {
-    const result = listDirectory(targetPath);
+    const result = listDirectory(targetPath, libraryId);
     if (result.error) {
-      return res.status(400).json({ message: result.error });
+      return res.status(400).json({ message: result.error, libraryRoots: libraryList });
     }
     return res.json({
-      libraryRoot: libraryDir,
+      libraryRoot: result.library,
+      libraryRoots: libraryList,
       currentPath: result.currentPath,
       items: result.items,
     });
   } catch (err) {
-    return res.status(400).json({ message: err.message });
+    return res.status(400).json({ message: err.message, libraryRoots: libraryList });
   }
 });
 
 router.get("/stream", (req, res) => {
   const targetPath = req.query.path;
+  const libraryId = req.query.library;
   if (!targetPath) {
     return res.status(400).json({ message: "path query parameter is required" });
   }
 
   let fileInfo;
   try {
-    fileInfo = getFileInfo(targetPath);
+    fileInfo = getFileInfo(targetPath, libraryId);
   } catch (err) {
     return res.status(400).json({ message: err.message });
   }
@@ -51,7 +57,7 @@ router.get("/stream", (req, res) => {
     return res.status(404).json({ message: fileInfo.error });
   }
 
-  const { absolute, relativePath, mediaKind } = fileInfo;
+  const { absolute, relativePath, mediaKind, library } = fileInfo;
   let { stats } = fileInfo;
   let streamPath = absolute;
   let contentType = req.query.contentType || "application/octet-stream";
@@ -62,7 +68,7 @@ router.get("/stream", (req, res) => {
       req.query.ios === "true" ||
       req.query.optimize === "ios" ||
       !isIosFriendlyVideo(absolute);
-    const prepared = ensureIosReadyVideo(absolute, relativePath, forceTranscode);
+    const prepared = ensureIosReadyVideo(absolute, relativePath, library.id, forceTranscode);
     if (prepared.error) {
       return res.status(500).json({ message: prepared.error });
     }
@@ -105,13 +111,14 @@ router.get("/stream", (req, res) => {
 
 router.post("/archive/extract", (req, res) => {
   const targetPath = req.body.path || req.query.path;
+  const libraryId = req.body.library || req.query.library;
   if (!targetPath) {
     return res.status(400).json({ message: "path is required" });
   }
 
   let fileInfo;
   try {
-    fileInfo = getFileInfo(targetPath);
+    fileInfo = getFileInfo(targetPath, libraryId);
   } catch (err) {
     return res.status(400).json({ message: err.message });
   }
@@ -125,7 +132,11 @@ router.post("/archive/extract", (req, res) => {
   }
 
   try {
-    const extracted = ensureArchiveExtracted(fileInfo.absolute, fileInfo.relativePath);
+    const extracted = ensureArchiveExtracted(
+      fileInfo.absolute,
+      fileInfo.relativePath,
+      fileInfo.library.id,
+    );
     const relativeExtracted = path.relative(archiveExtractDir, extracted);
     return res.json({ extractedPath: relativeExtracted });
   } catch (err) {

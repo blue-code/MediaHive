@@ -24,6 +24,7 @@ JWT_SECRET=your-secret
 DATA_DIR=./data
 STORAGE_DIR=./storage
 LIBRARY_DIR=./library   # folder containing epubs, videos, zip comics, etc.
+LIBRARY_DIRS=./library-a,./library-b   # optional: multiple library roots; falls back to LIBRARY_DIR
 THUMBNAIL_DIR=./storage/thumbnails
 ARCHIVE_EXTRACT_DIR=./storage/extracted
 TRANSCODED_DIR=./storage/transcoded
@@ -42,9 +43,9 @@ CACHE_CLEANUP_INTERVAL_MINUTES=30
 - `DELETE /api/content/:id` — delete content and its file (protected).
 - `PATCH /api/content/:id/navigation` — set a reading mode (`paged`, `webtoon`, `archive-comic`, or `archive-webtoon`) so keyboard shortcuts can be attached to compressed comics/webtoons (protected).
 - `GET /api/content/:id/shortcuts` — fetch the derived keyboard shortcut mapping for a content item, including whether archive items still require a mode selection.
-- `GET /api/library/browse?path=` — browse the configured library directory (mix of videos, epubs, zip comics, etc.). `path` is relative to `LIBRARY_DIR` (omit for root).
-- `GET /api/library/stream?path=` — stream any file inside the library directory (supports HTTP Range for videos). Supply `path` relative to `LIBRARY_DIR`.
-- `POST /api/library/archive/extract` — extract a CBZ/ZIP archive for comics into the configured extraction directory. Body or query: `path` relative to `LIBRARY_DIR`.
+- `GET /api/library/browse?path=&library=` — browse a configured library directory (mix of videos, epubs, zip comics, etc.). `path` is relative to the chosen library root (omit for root). `library` is optional and uses the first configured library by default.
+- `GET /api/library/stream?path=&library=` — stream any file inside the library directory (supports HTTP Range for videos). Supply `path` relative to the selected library.
+- `POST /api/library/archive/extract` — extract a CBZ/ZIP archive for comics into the configured extraction directory. Body or query: `path` relative to the library root and optional `library` to pick the source root.
 
 Static helpers:
 - Thumbnails are exposed from `/thumbnails/*`.

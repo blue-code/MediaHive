@@ -1,5 +1,6 @@
 const API_BASE = "/api";
 const storage = window.localStorage;
+const LIBRARY_STORAGE_KEY = "mediahiveLibraryId";
 
 const elements = {
   authView: document.getElementById("auth-view"),
@@ -12,6 +13,11 @@ const elements = {
   currentPath: document.getElementById("current-path"),
   message: document.getElementById("message"),
   toast: document.getElementById("toast"),
+  librarySelect: document.getElementById("library-select"),
+  libraryInfo: document.getElementById("library-info"),
+  browseButton: document.getElementById("browse"),
+  dropzone: document.getElementById("dropzone"),
+  fileInput: document.getElementById("file-input"),
 };
 
 const state = {
@@ -119,6 +125,7 @@ function renderItems(items) {
     return;
   }
 
+
   const fragments = document.createDocumentFragment();
   items
     .slice()
@@ -185,6 +192,7 @@ function init() {
   } else {
     showAuth();
   }
+
 }
 
 window.addEventListener("DOMContentLoaded", init);
