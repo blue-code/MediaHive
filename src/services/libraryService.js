@@ -21,6 +21,31 @@ const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", "
 const ALLOWED_MEDIA_KINDS = new Set(["directory", "video", "archive", "image"]);
 const ARCHIVE_EXTS = new Set([".zip", ".cbz", ".cbr"]);
 
+function buildArchivePages(entryPath, relativePath, root) {
+  try {
+    const existingTarget = getArchiveExtractionTarget(relativePath, root.id);
+    ensureDir(existingTarget);
+
+    let extractedDir = existingTarget;
+    let pages = listExtractedImages(existingTarget);
+
+    if (!pages.length) {
+      extractedDir = ensureArchiveExtracted(entryPath, relativePath, root.id);
+      pages = listExtractedImages(extractedDir);
+    }
+
+    const extractedPath = path.relative(archiveExtractDir, extractedDir);
+
+    return {
+      pages,
+      extractedPath,
+      thumbnail: pages.length ? `/extracted/${path.join(extractedPath, pages[0])}` : null,
+    };
+  } catch (_err) {
+    return { pages: [], extractedPath: null, thumbnail: null };
+  }
+}
+
 function resolveLibraryPath(requestedPath = "", libraryId) {
   const root = getLibraryRoot(libraryId);
   const normalized = requestedPath.startsWith("/")
@@ -60,15 +85,16 @@ function describeEntry(entryPath, dirent, root) {
   }
 
   if (mediaKind === "archive") {
-    const thumbPath = ensureArchiveThumbnail(relativePath, root.id);
+    const { thumbnail, pages, extractedPath } = buildArchivePages(entryPath, relativePath, root);
+    const fallbackThumb = ensureArchiveThumbnail(relativePath, root.id);
     return {
       ...base,
       mediaKind,
-      thumbnail: `/thumbnails/${path.basename(thumbPath)}`,
-      extractionTarget: path.relative(
-        archiveExtractDir,
-        getArchiveExtractionTarget(relativePath, root.id),
-      ),
+      thumbnail: thumbnail || `/thumbnails/${path.basename(fallbackThumb)}`,
+      pageCount: pages.length,
+      extractionTarget:
+        extractedPath ||
+        path.relative(archiveExtractDir, getArchiveExtractionTarget(relativePath, root.id)),
     };
   }
 
@@ -185,4 +211,5 @@ module.exports = {
   isIosFriendlyVideo,
   touchPath,
   listExtractedImages,
+  buildArchivePages,
 };
