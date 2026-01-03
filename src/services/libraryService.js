@@ -15,6 +15,7 @@ const {
 } = require("./mediaProcessingService");
 
 const DEFAULT_CHUNK_SIZE = 1 * 1024 * 1024; // 1MB
+const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".bmp"]);
 
 function resolveLibraryPath(requestedPath = "", libraryId) {
   const root = getLibraryRoot(libraryId);
@@ -121,6 +122,29 @@ function parseRange(rangeHeader, fileSize) {
   return { start, end: Math.min(end, fileSize - 1) };
 }
 
+function listExtractedImages(baseDir) {
+  if (!fs.existsSync(baseDir)) return [];
+  const files = [];
+
+  function walk(target) {
+    const entries = fs.readdirSync(target, { withFileTypes: true });
+    entries.forEach((entry) => {
+      const next = path.join(target, entry.name);
+      if (entry.isDirectory()) {
+        walk(next);
+      } else {
+        const ext = path.extname(entry.name).toLowerCase();
+        if (IMAGE_EXTS.has(ext)) {
+          files.push(path.relative(baseDir, next));
+        }
+      }
+    });
+  }
+
+  walk(baseDir);
+  return files.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+}
+
 module.exports = {
   listDirectory,
   getFileInfo,
@@ -129,4 +153,5 @@ module.exports = {
   ensureIosReadyVideo,
   isIosFriendlyVideo,
   touchPath,
+  listExtractedImages,
 };
