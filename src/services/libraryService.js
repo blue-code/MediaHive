@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { spawnSync } = require("child_process");
 const { archiveExtractDir, getLibraryRoot, libraryRoots } = require("../config");
 const {
   detectMediaKind,
@@ -13,10 +14,12 @@ const {
   isIosFriendlyVideo,
   touchPath,
 } = require("./mediaProcessingService");
+const { ensureDir } = require("../utils/fileStore");
 
 const DEFAULT_CHUNK_SIZE = 1 * 1024 * 1024; // 1MB
 const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".bmp"]);
 const ALLOWED_MEDIA_KINDS = new Set(["directory", "video", "archive", "image"]);
+const ARCHIVE_EXTS = new Set([".zip", ".cbz", ".cbr"]);
 
 function resolveLibraryPath(requestedPath = "", libraryId) {
   const root = getLibraryRoot(libraryId);
@@ -127,6 +130,7 @@ function parseRange(rangeHeader, fileSize) {
 function listExtractedImages(baseDir) {
   if (!fs.existsSync(baseDir)) return [];
   const files = [];
+  extractNestedArchives(baseDir);
 
   function walk(target) {
     const entries = fs.readdirSync(target, { withFileTypes: true });
@@ -145,6 +149,31 @@ function listExtractedImages(baseDir) {
 
   walk(baseDir);
   return files.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+}
+
+function extractNestedArchives(baseDir) {
+  try {
+    const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+    entries.forEach((entry) => {
+      const entryPath = path.join(baseDir, entry.name);
+      if (entry.isDirectory()) {
+        extractNestedArchives(entryPath);
+        return;
+      }
+
+      const ext = path.extname(entry.name).toLowerCase();
+      if (!ARCHIVE_EXTS.has(ext) || ext === ".cbr") return;
+
+      const targetDir = path.join(baseDir, path.parse(entry.name).name);
+      ensureDir(targetDir);
+      const result = spawnSync("unzip", ["-qq", "-o", entryPath, "-d", targetDir]);
+      if (result.status === 0) {
+        extractNestedArchives(targetDir);
+      }
+    });
+  } catch (_err) {
+    // best-effort; ignore nested archives we can't read
+  }
 }
 
 module.exports = {
