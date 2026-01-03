@@ -91,6 +91,14 @@ h3 {
   gap: 18px;
 }
 
+.grid.single-column {
+  grid-template-columns: 1fr;
+}
+
+.hidden {
+  display: none !important;
+}
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -332,6 +340,13 @@ select:focus,
   width: 100%;
   border-radius: 12px;
   background: #000;
+}
+
+.viewer-content .viewer-image {
+  display: block;
+  max-width: 100%;
+  border-radius: 12px;
+  background: #05070f;
 }
 
 .page-list {

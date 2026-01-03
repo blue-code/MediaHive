@@ -16,6 +16,7 @@ const {
 
 const DEFAULT_CHUNK_SIZE = 1 * 1024 * 1024; // 1MB
 const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".bmp"]);
+const ALLOWED_MEDIA_KINDS = new Set(["directory", "video", "archive", "image"]);
 
 function resolveLibraryPath(requestedPath = "", libraryId) {
   const root = getLibraryRoot(libraryId);
@@ -87,7 +88,8 @@ function listDirectory(targetPath = "", libraryId) {
   ensureMediaDirs();
   const entries = fs
     .readdirSync(absolute, { withFileTypes: true })
-    .map((dirent) => describeEntry(path.join(absolute, dirent.name), dirent, root));
+    .map((dirent) => describeEntry(path.join(absolute, dirent.name), dirent, root))
+    .filter((entry) => ALLOWED_MEDIA_KINDS.has(entry.mediaKind));
 
   return {
     items: entries,

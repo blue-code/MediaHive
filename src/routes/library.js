@@ -14,6 +14,16 @@ const {
   listExtractedImages,
 } = require("../services/libraryService");
 
+const IMAGE_MIME_MAP = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".bmp": "image/bmp",
+};
+
 const router = express.Router();
 router.use(authMiddleware);
 
@@ -83,6 +93,11 @@ router.get("/stream", (req, res) => {
 
   if (mediaKind === "subtitle") {
     contentType = contentType || "text/plain";
+  }
+
+  if (mediaKind === "image") {
+    const ext = path.extname(streamPath).toLowerCase();
+    contentType = IMAGE_MIME_MAP[ext] || contentType;
   }
 
   const range = parseRange(req.headers.range, stats.size);

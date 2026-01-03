@@ -1,9 +1,12 @@
 const API_BASE = "/api";
 const storage = window.localStorage;
 const LIBRARY_STORAGE_KEY = "mediahiveLibraryId";
+const SUPPORTED_MEDIA_KINDS = new Set(["directory", "video", "archive", "image"]);
 
 const elements = {
   loginForm: document.getElementById("login-form"),
+  authPanel: document.getElementById("auth"),
+  gridContainer: document.querySelector(".grid"),
   tokenStatus: document.getElementById("token-status"),
   authPill: document.getElementById("auth-pill"),
   librarySelect: document.getElementById("library-select"),
@@ -66,10 +69,14 @@ function paintAuthState() {
     elements.authPill.textContent = `${parsed.username}로 로그인됨`;
     elements.tokenStatus.textContent = "토큰 활성";
     elements.tokenStatus.classList.add("chip-flare");
+    elements.authPanel?.classList.add("hidden");
+    elements.gridContainer?.classList.add("single-column");
   } else {
     elements.authPill.textContent = "로그인이 필요합니다";
     elements.tokenStatus.textContent = "토큰 없음";
     elements.tokenStatus.classList.remove("chip-flare");
+    elements.authPanel?.classList.remove("hidden");
+    elements.gridContainer?.classList.remove("single-column");
   }
 }
 
@@ -155,12 +162,13 @@ function cardThumbnail(item) {
 
 function renderLibraryItems(items = []) {
   elements.libraryGrid.innerHTML = "";
-  if (!items.length) {
+  const filtered = items.filter((item) => SUPPORTED_MEDIA_KINDS.has(item.mediaKind || item.type));
+  if (!filtered.length) {
     elements.libraryGrid.innerHTML = "<p class='muted'>표시할 항목이 없습니다.</p>";
     return;
   }
 
-  items.forEach((item) => {
+  filtered.forEach((item) => {
     const card = document.createElement("article");
     card.className = "media-card";
     card.dataset.path = item.path;
@@ -278,6 +286,23 @@ function handleDirectory(item) {
   browseLibrary();
 }
 
+function handleImage(item) {
+  const params = new URLSearchParams();
+  params.set("path", item.path);
+  if (item.libraryId) params.set("library", item.libraryId);
+  const img = document.createElement("img");
+  img.src = `/api/library/stream?${params.toString()}`;
+  img.alt = item.name;
+  img.className = "viewer-image";
+
+  elements.viewerKind.textContent = "이미지";
+  elements.viewerTitle.textContent = item.name;
+  elements.viewerPath.textContent = item.path;
+  elements.viewerContent.innerHTML = "";
+  elements.viewerContent.append(img);
+  openViewer();
+}
+
 function handleFile(item) {
   const params = new URLSearchParams();
   params.set("path", item.path);
@@ -294,6 +319,7 @@ function handleOpenItem(item) {
   if (kind === "directory") return handleDirectory(item);
   if (kind === "video") return handleVideo(item);
   if (kind === "archive") return handleArchive(item);
+  if (kind === "image") return handleImage(item);
   return handleFile(item);
 }
 
