@@ -7,7 +7,7 @@
 - [x] Task: 공개 라이브러리 UI 구현 (Frontend) 504f3d7
     - [ ] Sub-task: Create Public Library Grid/List View Component
     - [ ] Sub-task: Integrate with Backend API
-- [ ] Task: EPUB 뷰어 기본 기능 구현
+- [x] Task: EPUB 뷰어 기본 기능 구현 f6981c3
     - [ ] Sub-task: Integrate ePub.js library
     - [ ] Sub-task: Create Reader Component with basic navigation (Prev/Next, TOC)
 - [ ] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
