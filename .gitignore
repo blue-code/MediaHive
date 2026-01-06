@@ -211,3 +211,16 @@ node_modules/
 npm-debug.log*
 storage/
 .env
+
+# Kokoro TTS Models
+kokoro-v0_19.onnx
+voices.bin
+voices-v1.0.bin
+
+# Temporary scripts
+scripts/check_voices.py
+
+# Public Library local storage
+public_library/*
+!public_library/.gitkeep
+

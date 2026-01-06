@@ -9,52 +9,47 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/epubjs/dist/epub.min.js"></script>
   </head>
-  <body>
-    <div class="app-shell">
-      <header class="header">
-        <div>
-          <p class="eyebrow">MediaHive</p>
-          <h1>내 라이브러리에서 바로 보는 스트리밍 뷰어</h1>
-          <p class="muted">
-            서버에 이미 있는 비디오와 압축 만화를 로그인 후 바로 감상하세요. 업로드 없이, 스트리밍과 압축 해제
-            뷰만 제공합니다.
-          </p>
+  <body class="dark-theme">
+    <div class="app-container">
+      <nav class="navbar">
+        <div class="nav-brand">MediaHive</div>
+        <div class="nav-actions">
+          <button id="show-login-btn" class="button ghost">로그인</button>
+          <div class="user-pill hidden" id="auth-pill"></div>
         </div>
-        <div class="user-pill" id="auth-pill">로그인이 필요합니다</div>
+      </nav>
+
+      <header class="hero">
+        <h1>나만의 미디어 컬렉션</h1>
+        <p class="muted">로그인 없이도 공개된 미디어를 바로 감상하세요.</p>
       </header>
 
-      <main class="grid">
-        <section class="panel" id="auth">
+      <main class="content-area">
+        <!-- 공개 라이브러리 (기본 노출) -->
+        <section class="panel" id="public-library">
           <div class="panel-header">
-            <h2>로그인</h2>
-            <div class="chip" id="token-status">토큰 없음</div>
+            <div class="row items-center gap">
+              <h2>탐색</h2>
+              <span id="public-library-info" class="badge-outline"></span>
+            </div>
+            <div class="row gap">
+               <input id="public-library-path" class="input search-input" placeholder="폴더 내 검색 또는 경로 이동" />
+            </div>
           </div>
-          <form id="login-form" class="form">
-            <label>아이디<input name="username" placeholder="demo" required /></label>
-            <label>비밀번호<input name="password" type="password" placeholder="password123" required /></label>
-            <button class="button primary" type="submit">로그인</button>
-          </form>
-          <p class="helper">시드 데이터가 있다면 <strong>demo / password123</strong>으로 로그인하세요.</p>
+          <div id="public-library-grid" class="media-grid">
+            <div class="loader">불러오는 중...</div>
+          </div>
         </section>
 
-        <section class="panel hidden" id="public-library">
-          <div class="panel-header">
-            <h2>공개 라이브러리</h2>
-            <p class="muted">누구나 자유롭게 열람할 수 있는 라이브러리입니다.</p>
-          </div>
-          <div id="public-library-info" class="library-info"></div>
-          <div id="public-library-grid" class="media-grid"></div>
-        </section>
-
-        <section class="panel" id="library">
+        <!-- 개인 라이브러리 (로그인 시 노출) -->
+        <section class="panel hidden" id="library">
           <div class="panel-header">
             <div>
-              <h2>라이브러리</h2>
-              <p class="muted">로그인하면 라이브러리가 자동으로 열리고, 선택 시 바로 전환됩니다.</p>
+              <h2>내 라이브러리</h2>
             </div>
             <div class="row gap">
               <select id="library-select" class="input"></select>
-              <input id="library-path" class="input" placeholder="폴더 경로 (선택)" />
+              <input id="library-path" class="input" placeholder="폴더 경로" />
             </div>
           </div>
           <div class="library-info" id="library-info"></div>
@@ -63,23 +58,46 @@
       </main>
     </div>
 
+    <!-- 로그인 모달 -->
+    <div class="modal hidden" id="login-modal">
+      <div class="modal-backdrop" id="login-backdrop"></div>
+      <div class="modal-body auth-card">
+        <div class="panel-header">
+          <h2>로그인</h2>
+          <button class="button ghost" id="login-close">×</button>
+        </div>
+        <form id="login-form" class="form">
+          <div class="form-group">
+            <label>아이디</label>
+            <input name="username" placeholder="demo" required />
+          </div>
+          <div class="form-group">
+            <label>비밀번호</label>
+            <input name="password" type="password" placeholder="password123" required />
+          </div>
+          <button class="button primary full-width" type="submit">로그인</button>
+        </form>
+        <p class="helper">시드 데이터: <strong>demo / password123</strong></p>
+      </div>
+    </div>
+
+    <!-- 뷰어 오버레이 -->
     <div class="viewer hidden" id="viewer">
       <div class="viewer-backdrop" id="viewer-backdrop"></div>
       <div class="viewer-body">
         <div class="viewer-header">
-          <div>
+          <div class="viewer-meta">
             <p class="eyebrow" id="viewer-kind">미디어</p>
             <h3 id="viewer-title"></h3>
-            <p class="muted" id="viewer-path"></p>
           </div>
-          <button class="button ghost" id="viewer-close">닫기</button>
+          <div class="viewer-controls" id="viewer-controls"></div>
+          <button class="button ghost circle-btn" id="viewer-close" title="닫기">×</button>
         </div>
         <div class="viewer-content" id="viewer-content"></div>
       </div>
     </div>
 
     <div class="toaster" id="toaster"></div>
-
     <script src="./app.js"></script>
   </body>
 </html>

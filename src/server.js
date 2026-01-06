@@ -10,6 +10,7 @@ const authRoutes = require("./routes/auth");
 const contentRoutes = require("./routes/content");
 const libraryRoutes = require("./routes/library");
 const publicLibraryRoutes = require("./routes/publicLibrary");
+const ttsRoutes = require("./routes/tts");
 
 function createApp() {
   ensureDir(storageDir);
@@ -34,8 +35,9 @@ function createApp() {
   app.use("/api/content", contentRoutes);
   app.use("/api/library", libraryRoutes);
   app.use("/api/public/library", publicLibraryRoutes);
+  app.use("/api/tts", ttsRoutes);
 
-  app.get("/", (_req, res) => {
+  app.get(["/", "/public/library"], (_req, res) => {
     res.sendFile(path.join(publicDir, "index.html"));
   });
 
