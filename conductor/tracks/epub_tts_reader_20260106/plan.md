@@ -4,7 +4,7 @@
 - [x] Task: 공개 라이브러리 API 엔드포인트 구현 (Backend) 3af0f20
     - [ ] Sub-task: Write Tests for Public Library API (GET /api/public/library)
     - [ ] Sub-task: Implement Controller logic to list files from configured public dir
-- [ ] Task: 공개 라이브러리 UI 구현 (Frontend)
+- [x] Task: 공개 라이브러리 UI 구현 (Frontend) 504f3d7
     - [ ] Sub-task: Create Public Library Grid/List View Component
     - [ ] Sub-task: Integrate with Backend API
 - [ ] Task: EPUB 뷰어 기본 기능 구현
