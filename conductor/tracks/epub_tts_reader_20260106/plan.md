@@ -1,7 +1,7 @@
 # Implementation Plan: 로그인 없는 EPUB 브라우징 및 TTS 지원 고급 리더 구현
 
 ## Phase 1: 비로그인 브라우징 및 EPUB 뷰어 기초 구현
-- [~] Task: 공개 라이브러리 API 엔드포인트 구현 (Backend)
+- [x] Task: 공개 라이브러리 API 엔드포인트 구현 (Backend) 3af0f20
     - [ ] Sub-task: Write Tests for Public Library API (GET /api/public/library)
     - [ ] Sub-task: Implement Controller logic to list files from configured public dir
 - [ ] Task: 공개 라이브러리 UI 구현 (Frontend)
