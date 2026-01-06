@@ -1,0 +1,8 @@
+{
+  "track_id": "epub_tts_reader_20260106",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-01-06T00:00:00Z",
+  "updated_at": "2026-01-06T00:00:00Z",
+  "description": "로그인 없는 EPUB 브라우징 및 TTS 지원 고급 리더 구현"
+}
