@@ -9,8 +9,9 @@ const { startCacheCleanup } = require("./services/cacheService");
 const authRoutes = require("./routes/auth");
 const contentRoutes = require("./routes/content");
 const libraryRoutes = require("./routes/library");
+const publicLibraryRoutes = require("./routes/publicLibrary");
 
-function bootstrap() {
+function createApp() {
   ensureDir(storageDir);
   ensureDir(path.join(storageDir, "media"));
   ensureMediaDirs();
@@ -32,6 +33,7 @@ function bootstrap() {
   app.use("/api/auth", authRoutes);
   app.use("/api/content", contentRoutes);
   app.use("/api/library", libraryRoutes);
+  app.use("/api/public/library", publicLibraryRoutes);
 
   app.get("/", (_req, res) => {
     res.sendFile(path.join(publicDir, "index.html"));
@@ -41,12 +43,16 @@ function bootstrap() {
     res.status(404).json({ message: `Route ${req.path} not found` });
   });
 
+  return app;
+}
+
+if (require.main === module) {
+  const app = createApp();
   app.listen(port, host, () => {
     const displayHost = host === "0.0.0.0" ? "localhost" : host;
     console.log(`MediaHive server listening on http://${displayHost}:${port}`);
   });
-
   startCacheCleanup();
 }
 
-bootstrap();
+module.exports = createApp;

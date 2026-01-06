@@ -47,6 +47,16 @@ const legacyLibraryDir = process.env.LIBRARY_DIR;
 const libraryDirs = libraryDirList.length ? libraryDirList : [legacyLibraryDir || "library"];
 const libraryRoots = buildLibraryRoots(libraryDirs);
 
+const publicLibraryDir = process.env.PUBLIC_LIBRARY_DIR
+  ? path.resolve(ROOT_DIR, process.env.PUBLIC_LIBRARY_DIR)
+  : path.join(ROOT_DIR, "public_library");
+
+libraryRoots.push({
+  id: "public",
+  name: "Public Library",
+  path: publicLibraryDir,
+});
+
 function getLibraryRoot(libraryId) {
   if (!libraryId) return libraryRoots[0];
   const found = libraryRoots.find((root) => root.id === libraryId);
@@ -75,4 +85,5 @@ module.exports = {
     process.env.CACHE_CLEANUP_INTERVAL_MINUTES || "30",
     10,
   ),
+  publicLibraryDir,
 };

@@ -7,7 +7,7 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "seed": "node scripts/seed.js",
-    "test": "npm run lint",
+    "test": "jest",
     "lint": "node scripts/lint-placeholder.js"
   },
   "keywords": [],
@@ -24,6 +24,8 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "jest": "^30.2.0",
+    "nodemon": "^3.1.4",
+    "supertest": "^7.1.4"
   }
 }

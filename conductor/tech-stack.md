@@ -23,3 +23,4 @@
 - **설정 관리:** `dotenv` (.env 활용)
 - **로깅:** `morgan` (HTTP request logger)
 - **파일 업로드:** `multer`
+- **테스트:** `jest`, `supertest`
