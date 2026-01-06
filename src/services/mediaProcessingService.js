@@ -9,6 +9,7 @@ const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", "
 const SUPPORTED_IOS_VIDEO_EXTS = new Set([".mp4", ".m4v", ".mov"]);
 const VIDEO_EXTS = new Set([...SUPPORTED_IOS_VIDEO_EXTS, ".mkv", ".avi", ".flv", ".wmv", ".webm"]);
 const ARCHIVE_EXTS = new Set([".zip", ".cbz", ".cbr"]);
+const EPUB_EXTS = new Set([".epub"]);
 const SUBTITLE_EXTS = new Set([".srt", ".smi"]);
 const ARCHIVE_EXTRACTORS = [
   { cmd: "unzip", args: (src, target) => ["-qq", "-o", src, "-d", target], skipFor: [".cbr"] },
@@ -42,6 +43,7 @@ function detectMediaKind(entryPath, dirent) {
   const ext = path.extname(entryPath).toLowerCase();
   if (VIDEO_EXTS.has(ext)) return "video";
   if (ARCHIVE_EXTS.has(ext)) return "archive";
+  if (EPUB_EXTS.has(ext)) return "epub";
   if (SUBTITLE_EXTS.has(ext)) return "subtitle";
   if (IMAGE_EXTS.has(ext)) return "image";
   return "file";

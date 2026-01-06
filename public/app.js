@@ -1,7 +1,7 @@
 const API_BASE = "/api";
 const storage = window.localStorage;
 const LIBRARY_STORAGE_KEY = "mediahiveLibraryId";
-const SUPPORTED_MEDIA_KINDS = new Set(["directory", "video", "archive", "image"]);
+const SUPPORTED_MEDIA_KINDS = new Set(["directory", "video", "archive", "image", "epub"]);
 
 const elements = {
   loginForm: document.getElementById("login-form"),
@@ -30,6 +30,8 @@ const elements = {
 let currentArchiveContext = null;
 let currentImageIndex = 0;
 let currentImageList = [];
+let book = null;
+let rendition = null;
 
 function toast(message, variant = "info") {
   const div = document.createElement("div");
@@ -239,6 +241,11 @@ function closeViewer() {
   currentArchiveContext = null;
   currentImageIndex = 0;
   currentImageList = [];
+  if (book) {
+      book.destroy();
+      book = null;
+      rendition = null;
+  }
   elements.viewer.classList.add("hidden");
   elements.viewerContent.innerHTML = "";
 }
@@ -583,6 +590,50 @@ function handleFile(item) {
   link.click();
 }
 
+function handleEpub(item) {
+  currentArchiveContext = null;
+  const base = item.isPublic ? "/api/public/library" : "/api/library";
+  const params = new URLSearchParams();
+  params.set("path", item.path);
+  if (item.libraryId && !item.isPublic) params.set("library", item.libraryId);
+  const token = getToken();
+  if (token && !item.isPublic) params.set("token", token);
+  
+  const url = `${API_BASE}${base.replace("/api", "")}/stream?${params.toString()}`;
+
+  elements.viewerKind.textContent = "eBook";
+  elements.viewerTitle.textContent = item.name;
+  elements.viewerPath.textContent = item.path;
+  elements.viewerContent.innerHTML = "<div id='epub-viewer' style='width:100%;height:100%;'></div>";
+  
+  const actions = document.createElement("div");
+  actions.className = "viewer-actions";
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "button ghost";
+  prevBtn.textContent = "이전";
+  prevBtn.onclick = () => rendition && rendition.prev();
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "button ghost";
+  nextBtn.textContent = "다음";
+  nextBtn.onclick = () => rendition && rendition.next();
+  actions.append(prevBtn, nextBtn);
+  elements.viewerContent.prepend(actions);
+
+  openViewer();
+
+  if (window.ePub) {
+      book = ePub(url);
+      rendition = book.renderTo("epub-viewer", {
+        width: "100%",
+        height: "100%",
+        flow: "paginated" // or "scrolled"
+      });
+      rendition.display();
+  } else {
+      toast("ePub 라이브러리를 로드하지 못했습니다.", "error");
+  }
+}
+
 function handleOpenItem(item) {
   if (item.source === "extracted") {
     return handleOpenExtractedItem(item);
@@ -592,6 +643,7 @@ function handleOpenItem(item) {
   if (kind === "video") return handleVideo(item);
   if (kind === "archive") return handleArchive(item);
   if (kind === "image") return handleImage(item);
+  if (kind === "epub") return handleEpub(item);
   return handleFile(item);
 }
 
@@ -620,6 +672,20 @@ function navigateToPreviousImage() {
 function setupKeyboardNavigation() {
   document.addEventListener('keydown', (event) => {
     if (!elements.viewer.classList.contains('hidden')) {
+      if (book && rendition) {
+         if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            rendition.prev();
+         } else if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            rendition.next();
+         } else if (event.key === 'Escape') {
+            event.preventDefault();
+            closeViewer();
+         }
+         return;
+      }
+
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
         navigateToPreviousImage();

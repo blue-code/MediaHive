@@ -23,7 +23,7 @@ const { ensureDir } = require("../utils/fileStore");
 
 const DEFAULT_CHUNK_SIZE = 1 * 1024 * 1024; // 1MB
 const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".bmp"]);
-const ALLOWED_MEDIA_KINDS = new Set(["directory", "video", "archive", "image"]);
+const ALLOWED_MEDIA_KINDS = new Set(["directory", "video", "archive", "image", "epub"]);
 const ARCHIVE_EXTS = new Set([".zip", ".cbz", ".cbr"]);
 
 function ensureDirectoryThumbnail(firstImagePath, dirRelativePath, libraryId) {
