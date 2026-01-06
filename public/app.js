@@ -21,6 +21,10 @@ const elements = {
   viewerTitle: document.getElementById("viewer-title"),
   viewerKind: document.getElementById("viewer-kind"),
   viewerPath: document.getElementById("viewer-path"),
+  publicLibraryPanel: document.getElementById("public-library"),
+  publicLibraryInfo: document.getElementById("public-library-info"),
+  publicLibraryGrid: document.getElementById("public-library-grid"),
+  libraryPanel: document.getElementById("library"),
 };
 
 let currentArchiveContext = null;
@@ -246,13 +250,13 @@ function joinExtractedPath(root, relative) {
     .replace(/\\/g, "/");
 }
 
-async function fetchArchiveListing({ scope = "library", archivePath, libraryId, subpath = "", root }) {
+async function fetchArchiveListing({ scope = "library", archivePath, libraryId, subpath = "", root, isPublic = false }) {
   const params = new URLSearchParams();
   if (scope === "extracted") {
     params.set("scope", "extracted");
   }
   params.set("path", archivePath);
-  if (libraryId && scope === "library") {
+  if (libraryId && scope === "library" && !isPublic) {
     params.set("library", libraryId);
   }
   if (root && scope === "extracted") {
@@ -261,7 +265,8 @@ async function fetchArchiveListing({ scope = "library", archivePath, libraryId, 
   if (subpath) {
     params.set("subpath", subpath);
   }
-  return api(`/library/archive/browse?${params.toString()}`);
+  const base = isPublic ? "/public/library" : "/library";
+  return api(`${base}/archive/browse?${params.toString()}`);
 }
 
 function renderArchiveBreadcrumbs(context) {
@@ -296,7 +301,7 @@ function renderArchiveBrowser(context) {
   // Build image list for keyboard navigation
   currentImageList = (context.items || [])
     .filter(item => (item.mediaKind || item.type) === "image")
-    .map(item => ({ item, context }));
+    .map(item => ({ item: { ...item, isPublic: context.isPublic }, context }));
   currentImageIndex = 0;
   
   elements.viewerKind.textContent = "압축 탐색";
@@ -313,7 +318,7 @@ function renderArchiveBrowser(context) {
   const grid = document.createElement("div");
   grid.className = "media-grid";
   renderMediaGrid(
-    context.items || [],
+    (context.items || []).map(i => ({...i, isPublic: context.isPublic})),
     grid,
     (item) => handleOpenExtractedItem(item, context),
     "압축을 풀었지만 표시할 항목이 없습니다.",
@@ -334,7 +339,9 @@ async function loadArchivePath(subpath = "", context = currentArchiveContext) {
       libraryId: context.libraryId,
       subpath,
       root: context.scope === "extracted" ? context.archiveSourceRoot : undefined,
+      isPublic: context.isPublic,
     });
+    data.isPublic = context.isPublic;
     renderArchiveBrowser(data);
   } catch (err) {
     toast(err.message, "error");
@@ -347,7 +354,9 @@ async function handleArchive(item) {
       scope: "library",
       archivePath: item.path,
       libraryId: item.libraryId,
+      isPublic: item.isPublic,
     });
+    data.isPublic = item.isPublic;
     renderArchiveBrowser(data);
   } catch (err) {
     toast(err.message, "error");
@@ -471,10 +480,11 @@ async function handleOpenExtractedItem(item, context = currentArchiveContext) {
   renderExtractedFile(item);
 }
 
-function buildSubtitleTracks(videoEl, subtitles = [], libraryId) {
+function buildSubtitleTracks(videoEl, subtitles = [], libraryId, isPublic = false) {
   subtitles.forEach((sub) => {
-    const url = `/api/library/stream?path=${encodeURIComponent(sub)}${
-      libraryId ? `&library=${encodeURIComponent(libraryId)}` : ""
+    const base = isPublic ? "/api/public/library" : "/api/library";
+    const url = `${base}/stream?path=${encodeURIComponent(sub)}${
+      (libraryId && !isPublic) ? `&library=${encodeURIComponent(libraryId)}` : ""
     }`;
     const track = document.createElement("track");
     track.kind = "subtitles";
@@ -489,22 +499,23 @@ function handleVideo(item) {
   currentArchiveContext = null;
   const params = new URLSearchParams();
   params.set("path", item.path);
-  if (item.libraryId) params.set("library", item.libraryId);
+  if (item.libraryId && !item.isPublic) params.set("library", item.libraryId);
   params.set("ios", "true");
   const token = getToken();
-  if (token) params.set("token", token);
+  if (token && !item.isPublic) params.set("token", token);
 
+  const base = item.isPublic ? "/api/public/library" : "/api/library";
   const video = document.createElement("video");
   video.controls = true;
   video.playsInline = true;
   video.autoplay = true;
-  video.src = `/api/library/stream?${params.toString()}`;
+  video.src = `${base}/stream?${params.toString()}`;
   video.addEventListener("canplay", () => {
     if (video.paused) {
       video.play().catch(() => {});
     }
   });
-  buildSubtitleTracks(video, item.subtitles || [], item.libraryId);
+  buildSubtitleTracks(video, item.subtitles || [], item.libraryId, item.isPublic);
 
   elements.viewerKind.textContent = "비디오 스트리밍";
   elements.viewerTitle.textContent = item.name;
@@ -529,6 +540,7 @@ function handleImage(item) {
       path: card.dataset.path,
       libraryId: card.dataset.library,
       name: card.querySelector('.media-title')?.textContent || '',
+      isPublic: item.isPublic // Assume siblings are also public if item is
     }));
   
   currentImageList = libraryImages.map(img => ({ item: img, context: null }));
@@ -537,11 +549,13 @@ function handleImage(item) {
   
   const params = new URLSearchParams();
   params.set("path", item.path);
-  if (item.libraryId) params.set("library", item.libraryId);
+  if (item.libraryId && !item.isPublic) params.set("library", item.libraryId);
   const token = getToken();
-  if (token) params.set("token", token);
+  if (token && !item.isPublic) params.set("token", token);
+  
+  const base = item.isPublic ? "/api/public/library" : "/api/library";
   const img = document.createElement("img");
-  img.src = `/api/library/stream?${params.toString()}`;
+  img.src = `${base}/stream?${params.toString()}`;
   img.alt = item.name;
   img.className = "viewer-image";
 
@@ -557,11 +571,13 @@ function handleFile(item) {
   currentArchiveContext = null;
   const params = new URLSearchParams();
   params.set("path", item.path);
-  if (item.libraryId) params.set("library", item.libraryId);
+  if (item.libraryId && !item.isPublic) params.set("library", item.libraryId);
   const token = getToken();
-  if (token) params.set("token", token);
+  if (token && !item.isPublic) params.set("token", token);
+  
+  const base = item.isPublic ? "/api/public/library" : "/api/library";
   const link = document.createElement("a");
-  link.href = `/api/library/stream?${params.toString()}`;
+  link.href = `${base}/stream?${params.toString()}`;
   link.target = "_blank";
   link.rel = "noopener";
   link.click();
@@ -635,15 +651,58 @@ async function handleLogin(event) {
   }
 }
 
+async function browsePublicLibrary(path = "") {
+  try {
+    const params = new URLSearchParams();
+    if (path) params.set("path", path);
+    const data = await api(`/public/library?${params.toString()}`);
+    
+    if (data.library) {
+        const label = data.currentPath || ".";
+        elements.publicLibraryInfo.textContent = `${data.library.name} · 현재 경로: ${label}`;
+    }
+
+    renderMediaGrid(
+      (data.items || []).map(i => ({...i, isPublic: true})), 
+      elements.publicLibraryGrid, 
+      (item) => handleOpenPublicItem(item)
+    );
+  } catch (err) {
+    elements.publicLibraryGrid.innerHTML = `<p class='muted'>${err.message}</p>`;
+    toast(err.message, "error");
+  }
+}
+
+function handleOpenPublicItem(item) {
+  const kind = item.mediaKind || item.type;
+  if (kind === "directory") {
+      browsePublicLibrary(item.path);
+      return;
+  }
+  handleOpenItem({ ...item, isPublic: true });
+}
+
 function init() {
-  paintAuthState();
+  const isPublicMode = window.location.pathname === "/public/library";
+  
   setupKeyboardNavigation();
+  elements.viewerClose.addEventListener("click", closeViewer);
+  elements.viewerBackdrop.addEventListener("click", closeViewer);
+
+  if (isPublicMode) {
+      elements.authPanel?.classList.add("hidden");
+      elements.libraryPanel?.classList.add("hidden");
+      elements.publicLibraryPanel?.classList.remove("hidden");
+      elements.gridContainer?.classList.add("single-column");
+      browsePublicLibrary();
+      return;
+  }
+
+  paintAuthState();
   if (!getToken()) {
     clearLibraryView();
   }
   elements.loginForm.addEventListener("submit", handleLogin);
-  elements.viewerClose.addEventListener("click", closeViewer);
-  elements.viewerBackdrop.addEventListener("click", closeViewer);
   if (elements.librarySelect) {
     elements.librarySelect.addEventListener("change", () => {
       const selected = elements.librarySelect.value;
